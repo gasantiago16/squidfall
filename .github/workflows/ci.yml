@@ -26,6 +26,9 @@ jobs:
       - name: Tools — image import check
         run: docker run --rm squidfall/tools:latest python -c "import fastmcp; print('tools image OK')"
 
+      - name: Tools — weather providers (offline static)
+        run: docker run --rm -e GEOCODER_PROVIDER=static -e "GEOCODER_STATIC_DEFAULT=40.44,-79.99" -e FORECAST_PROVIDER=static -e FORECAST_STATIC_TEXT=offline-ok squidfall/tools:latest python -c "import asyncio; from squidfall.providers import geocode, forecast; print(asyncio.run(geocode('x')), '|', asyncio.run(forecast(1.0, 2.0)))"
+
       - name: Inference — dependency import check
         run: docker run --rm squidfall/inference:latest python -c "import langgraph, langchain_ollama, ag_ui_langgraph, langchain_mcp_adapters; print('inference deps OK')"
 

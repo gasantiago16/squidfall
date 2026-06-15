@@ -49,6 +49,13 @@ The inference agent's model is chosen by **`LLM_PROVIDER`** in `inference/.env` 
 
 **No Ollama on the target box?** Set `LLM_PROVIDER=azure_openai` (or `openai`) and inject the secret at deploy. The chosen model/endpoint must support tool calling.
 
+## D. Weather data providers (air-gap)
+The weather tools are pluggable like the LLM (factory in `tools/squidfall/providers.py`):
+- `GEOCODER_PROVIDER=maps_co` (default; set `GEOCODER_BASE_URL` to an internal Nominatim-compatible mirror) or `static` (canned coords via `GEOCODER_STATIC` / `GEOCODER_STATIC_DEFAULT`).
+- `FORECAST_PROVIDER=weather_gov` (default; set `FORECAST_BASE_URL` to a mirror) or `static` (`FORECAST_STATIC_TEXT`).
+
+In a closed enclave with no egress, set both to `static` (or point the base URLs at internal services) so the tools work without the public internet.
+
 ## Notes
 - `host.docker.internal` lets containers reach Ollama on the host (on WSL, the Windows host).
 - `tools/.env` (gitignored) holds the geocoding key; it is **optional** for startup

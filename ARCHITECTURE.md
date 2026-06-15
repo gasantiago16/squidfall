@@ -55,10 +55,11 @@ All containers join the default Compose network and reach each other by **contai
 
 ### 3.3 `tools`
 - **Stack:** **FastMCP** server, `transport="streamable-http"`, host `0.0.0.0`, port `8002`, mount `/mcp`.
-- **Tools exposed over MCP:**
-  - `get_coordinates(location)` → `geocode.maps.co/search` (needs `GEOCODING_API_KEY`).
-  - `get_forecast(lat, lon)` → `api.weather.gov/points/...` → forecast (US-only).
-- **Env (`tools/.env`, gitignored):** `GEOCODING_API_KEY` — **configured and verified** (real geocode results flowing).
+- **Tools (provider-pluggable, like the LLM):** `get_coordinates` / `get_forecast` call a factory (`providers.py`) that dispatches on env — endpoints are configurable and can run **fully offline**:
+  - `GEOCODER_PROVIDER` = `maps_co` (default; Nominatim-compatible — point `GEOCODER_BASE_URL` at a mirror; key `GEOCODING_API_KEY`) | `static` (canned coords for air-gap/CI).
+  - `FORECAST_PROVIDER` = `weather_gov` (default; US NWS — `FORECAST_BASE_URL` repoints) | `static` (canned text).
+  - `*_VERIFY_SSL` and `WEATHER_HTTP_TIMEOUT` configurable.
+- **Env (`tools/.env`, gitignored):** `GEOCODING_API_KEY` + the provider vars above. Defaults = the public APIs, verified working.
 
 ### 3.4 `inference`
 - **Stack:** a LangGraph **ReAct** agent (`langgraph.prebuilt.create_react_agent`) served over the **AG-UI protocol** via `ag-ui-langgraph` (`LangGraphAgent` + `add_langgraph_fastapi_endpoint(app, agent, "/api/v1")`), FastAPI/uvicorn on `8001`.

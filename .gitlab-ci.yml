@@ -35,6 +35,7 @@ imports:
   needs: [build]
   script:
     - docker run --rm squidfall/tools:latest python -c "import fastmcp"
+    - docker run --rm -e GEOCODER_PROVIDER=static -e GEOCODER_STATIC_DEFAULT=40.44,-79.99 -e FORECAST_PROVIDER=static -e FORECAST_STATIC_TEXT=offline-ok squidfall/tools:latest python -c "import asyncio; from squidfall.providers import geocode, forecast; print(asyncio.run(geocode('x')), '|', asyncio.run(forecast(1.0, 2.0)))"
     - docker run --rm squidfall/inference:latest python -c "import langgraph, langchain_ollama, ag_ui_langgraph, langchain_mcp_adapters"
     # LLM provider factory — offline construction for all 3 providers
     - docker run --rm -e LLM_PROVIDER=ollama squidfall/inference:latest python -c "from squidfall.llm import build_llm; print(type(build_llm()).__name__)"
