@@ -48,7 +48,7 @@
   <h1>Squidfall — Architecture Breakdown</h1>
   <div class="sub">Local rebuild of the Army AI2C / CDSO <strong>Squidfall</strong> reference app, with a <strong>fully-local CI/CD pipeline</strong> on self-hosted git runners.</div>
   <div class="sub">Source: <a href="https://deathlabs.github.io/squidfall/">deathlabs.github.io/squidfall</a> (mirror of <code>pages.cdso.army.mil/ai2c/squidfall/docs</code>)</div>
-  <div class="note" style="border-left-color:var(--ok);margin-top:14px">✅ <strong>Phase 1 complete</strong> — all 5 containers build &amp; run; weather chat verified end-to-end (live geocode → live NWS forecast → streamed answer); liquid-glass frontend. <strong>Next: Phase 2</strong> (GitHub repo + self-hosted Actions runner).</div>
+  <div class="note" style="border-left-color:var(--ok);margin-top:14px">✅ <strong>Phases 1 &amp; 2 complete</strong> — 5 containers build &amp; run, weather chat verified end-to-end, liquid-glass frontend; public repo <a href="https://github.com/gasantiago16/squidfall">gasantiago16/squidfall</a> + self-hosted runner <code>squidfall-win</code> with a green workflow. <strong>Next: Phase 3</strong> — the CI pipeline.</div>
 </header>
 
 <h2>1 · What Squidfall is</h2>
@@ -188,8 +188,8 @@
     <p>Build 5 images → backend tests on SQLite (no DB needed) → lint (ruff/eslint) → <strong>Trivy</strong> image scan → smoke tests (backend POST, inference health, tools MCP handshake).</p></div>
   <div class="card"><h3>CD — merge / tag</h3>
     <p>Tag images by SHA → push to <strong>local registry</strong> → deploy via <code>make ... start</code> → post-deploy health gate → rollback on failure.</p></div>
-  <div class="card"><h3>Local git runner — chosen</h3>
-    <p><strong>GitHub repo + self-hosted Actions runner.</strong> GitHub stores code &amp; fires triggers; every build/scan/deploy runs on our hardware (<code>runs-on: [self-hosted]</code>) to limit exposure.</p></div>
+  <div class="card"><h3>Local git runner — live</h3>
+    <p><strong>GitHub repo + self-hosted Actions runner.</strong> Repo <code>gasantiago16/squidfall</code>; runner <code>squidfall-win</code> (<code>runs-on: [self-hosted, windows, x64]</code>) on our hardware. GitHub triggers; build/scan/deploy run locally to limit exposure.</p></div>
 </div>
 
 <h2>6 · Build roadmap</h2>
@@ -197,8 +197,8 @@
   <tr><th>Phase</th><th>Goal</th><th>Output</th></tr>
   <tr><td>0</td><td>Scaffolding + architecture docs</td><td>✅ done</td></tr>
   <tr><td>1</td><td>Build &amp; run app locally</td><td>✅ <strong>done</strong> — 5 containers built + running, weather chat verified E2E, glass UI</td></tr>
-  <tr><td>2</td><td>GitHub repo + self-hosted runner</td><td>⏭ next — git init, push, register runner, hello-world workflow</td></tr>
-  <tr><td>3</td><td>CI pipeline</td><td>build + test + lint + Trivy scan</td></tr>
+  <tr><td>2</td><td>GitHub repo + self-hosted runner</td><td>✅ <strong>done</strong> — public repo, runner <code>squidfall-win</code> online, hello-world green</td></tr>
+  <tr><td>3</td><td>CI pipeline</td><td>⏭ <strong>next</strong> — build + test + lint + Trivy scan (self-hosted)</td></tr>
   <tr><td>4</td><td>CD pipeline</td><td>local registry + versioned images + auto deploy + health gate</td></tr>
   <tr><td>5</td><td>Author blank doc pages</td><td>real CI / CD / Platform / Deployment / Documentation content</td></tr>
   <tr><td>6</td><td>Platform + deployment hardening</td><td>secrets, network/auth tightening, prod-like target</td></tr>

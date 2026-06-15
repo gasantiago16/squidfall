@@ -4,7 +4,7 @@
 > Source docs: `https://deathlabs.github.io/squidfall/` (mirror of `https://pages.cdso.army.mil/ai2c/squidfall/docs/`).
 > This is *our* working architecture — what the published docs describe **plus** the parts we filled in ourselves (the empty CI/CD/Platform/Deployment/Documentation pages) and every fix we made to get it actually running.
 
-> **Status — ✅ Phase 1 complete.** All 5 containers build, run, and a weather chat works **end-to-end** (verified: "weather in Pittsburgh, PA" → live geocode → live NWS forecast → streamed answer on both `http://localhost` and the dev server). The frontend carries a liquid-glass UI. **Next: Phase 2** — GitHub repo + self-hosted Actions runner.
+> **Status — ✅ Phase 1 complete.** All 5 containers build, run, and a weather chat works **end-to-end** (verified: "weather in Pittsburgh, PA" → live geocode → live NWS forecast → streamed answer on both `http://localhost` and the dev server). The frontend carries a liquid-glass UI. **Phase 2 done** — public repo [`gasantiago16/squidfall`](https://github.com/gasantiago16/squidfall) + self-hosted runner `squidfall-win` (hello-world workflow green). **Next: Phase 3** — the CI pipeline.
 
 ---
 
@@ -122,6 +122,7 @@ The published **Continuous Integration, Continuous Delivery, Platform Resources,
 ### 6.3 Local git runner — **CHOSEN**
 - **Repo:** hosted on **GitHub.com** (code + workflow YAML).
 - **Compute:** a **self-hosted GitHub Actions runner** on our own machine — every build, scan, image push, and deploy runs on our hardware, never on GitHub-hosted runners. GitHub stores the code and fires triggers; the runner (and the Docker daemon, local registry, deploy target) stays private. Workflows live in `.github/workflows/` with `runs-on: [self-hosted]`.
+- **Live (Phase 2):** repo `https://github.com/gasantiago16/squidfall` (public); runner **`squidfall-win`** (labels `self-hosted, windows, x64`, `runner v2.335.1`) installed at `C:\actions-runner\squidfall`; `.github/workflows/hello.yml` verified green. Persistence: run interactively (`run.cmd`) or install as a Windows service (`svc.cmd install` from an admin shell).
 
 ---
 
@@ -131,8 +132,8 @@ The published **Continuous Integration, Continuous Delivery, Platform Resources,
 |------|------|--------|
 | **0** | Scaffolding + architecture docs | ✅ done |
 | **1** | Build & run the app locally | ✅ **done — 5 containers built + running, weather chat verified E2E, glass UI** |
-| **2** | GitHub repo + self-hosted Actions runner | ⏭ next — `git init`, push, register runner, hello-world workflow |
-| **3** | CI pipeline | build + test + lint + Trivy scan on push/PR |
+| **2** | GitHub repo + self-hosted Actions runner | ✅ **done** — public repo `gasantiago16/squidfall`, runner `squidfall-win` online, hello-world green |
+| **3** | CI pipeline | ⏭ **next** — build + test + lint + Trivy scan on push/PR (self-hosted) |
 | **4** | CD pipeline | local registry + versioned images + auto deploy + health gate |
 | **5** | Author the blank doc pages | real content for CI / CD / Platform / Deployment / Documentation |
 | **6** | Platform Resources + hardening | secrets, tighten Postgres auth off `0.0.0.0/0`, prod-like target |
