@@ -13,6 +13,7 @@ For the system design, see [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 | Continuous Delivery | [setup](continuous-delivery/setup.md) — registry + prod-like deploy |
 | Deployment | [setup](deployment/setup.md) — one-shot bootstrap + prod-like release |
 | Documentation | [setup](documentation/setup.md) — how these docs are maintained |
+| **Operations** | [**runbook**](operations.md) — GitLab + WSL + restricted-network deploy notes |
 
 **Fastest path (Linux / WSL):** clone the repo, then run `./squidfall.sh`.
 

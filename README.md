@@ -73,6 +73,7 @@ If you install make (`winget install GnuWin32.Make`), the `Makefile` mirrors the
 - ✅ Phase 4 — CD pipeline (`cd.yml`): local registry + prod-like deploy + health gate + rollback; released v0.1.0
 - ✅ Phase 5 — `docs/` Setup pages authored from the real pipeline
 - ✅ Phase 6 — hardening (SCRAM + private `pg_hba`, prod DB internal-only, Trivy blocking) + GitLab CI translation (`.gitlab-ci.yml`)
+- ✅ Deployed — migrated to **Army GitLab + WSL**, running with **OpenAI** (native Docker engine; geocoding live). See [`docs/operations.md`](docs/operations.md).
 
 ## Deliberate deviations from the reference docs (so it actually builds/runs)
 
