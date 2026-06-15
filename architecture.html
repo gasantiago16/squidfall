@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Squidfall — Architecture Breakdown</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --ink:#e6edf3; --muted:#9aa7b4;
+    --line:#30363d; --accent:#39d0d8; --accent2:#7c93ff; --warn:#ffb454; --bug:#ff7b72; --ok:#3fb950;
+    --db:#7c93ff; --be:#3fb950; --tl:#ffb454; --inf:#39d0d8; --fe:#d2a8ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 24px 80px}
+  header{border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:28px}
+  h1{font-size:30px;margin:0 0 6px}
+  h2{font-size:21px;margin:38px 0 12px;padding-top:10px;border-top:1px solid var(--line)}
+  h3{font-size:16px;margin:18px 0 6px;color:var(--accent)}
+  .sub{color:var(--muted);font-size:14px}
+  code{background:#0b0f14;border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:13px;color:var(--accent)}
+  pre{background:#0b0f14;border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:13px;color:#cbd5e1}
+  a{color:var(--accent2)}
+  table{border-collapse:collapse;width:100%;margin:10px 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:var(--ink)}
+  tr:nth-child(even) td{background:#11161e}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin:14px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .card h3{margin-top:0}
+  .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted);margin:2px 4px 2px 0}
+  .tag-db{border-color:var(--db);color:var(--db)} .tag-be{border-color:var(--be);color:var(--be)}
+  .tag-tl{border-color:var(--tl);color:var(--tl)} .tag-inf{border-color:var(--inf);color:var(--inf)}
+  .tag-fe{border-color:var(--fe);color:var(--fe)}
+  .note{background:var(--panel2);border-left:3px solid var(--accent);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0}
+  .warn{border-left-color:var(--warn)} .bug{border-left-color:var(--bug)}
+  .legend{font-size:13px;color:var(--muted);margin-top:8px}
+  .diagram{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px;margin:14px 0}
+  .roadmap td:first-child{font-weight:700;color:var(--accent)}
+  .emoji{font-style:normal}
+  footer{margin-top:40px;border-top:1px solid var(--line);padding-top:16px;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Squidfall — Architecture Breakdown</h1>
+  <div class="sub">Local rebuild of the Army AI2C / CDSO <strong>Squidfall</strong> reference app, with a <strong>fully-local CI/CD pipeline</strong> on self-hosted git runners.</div>
+  <div class="sub">Source: <a href="https://deathlabs.github.io/squidfall/">deathlabs.github.io/squidfall</a> (mirror of <code>pages.cdso.army.mil/ai2c/squidfall/docs</code>)</div>
+  <div class="note" style="border-left-color:var(--ok);margin-top:14px">✅ <strong>Phase 1 complete</strong> — all 5 containers build &amp; run; weather chat verified end-to-end (live geocode → live NWS forecast → streamed answer); liquid-glass frontend. <strong>Next: Phase 2</strong> (GitHub repo + self-hosted Actions runner).</div>
+</header>
+
+<h2>1 · What Squidfall is</h2>
+<p>A <strong>containerized, agentic AI chat application</strong>. The shipped example is a <strong>weather assistant</strong>: a user chats in a web UI, an LLM <em>agent</em> decides when it needs real-world data, it calls <em>tools</em> over MCP to geocode a place and fetch a forecast from <code>api.weather.gov</code>, and chat history can persist to PostgreSQL. Everything runs as <strong>5 Docker containers</strong> orchestrated by a <strong>Makefile + <code>compose.yml</code></strong> using <strong>Compose profiles</strong>.</p>
+
+<h2>2 · System diagram</h2>
+<div class="diagram">
+<svg viewBox="0 0 1000 520" width="100%" role="img" aria-label="Squidfall architecture diagram">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#9aa7b4"/>
+    </marker>
+    <style>
+      .box{rx:10;stroke-width:1.5;fill:#161b22}
+      .lbl{fill:#e6edf3;font:600 14px Segoe UI,sans-serif}
+      .meta{fill:#9aa7b4;font:11px ui-monospace,Consolas,monospace}
+      .edge{stroke:#9aa7b4;stroke-width:1.6;fill:none;marker-end:url(#arrow)}
+      .edgelbl{fill:#9aa7b4;font:11px Segoe UI,sans-serif}
+      .ext{fill:#0b0f14;stroke:#30363d;stroke-dasharray:5 4}
+    </style>
+  </defs>
+
+  <!-- Browser -->
+  <rect class="box" x="40" y="30" width="150" height="56" stroke="#9aa7b4"/>
+  <text class="lbl" x="60" y="55">Browser</text>
+  <text class="meta" x="60" y="73">user chat UI</text>
+
+  <!-- frontend -->
+  <rect class="box" x="40" y="150" width="190" height="70" stroke="#d2a8ff"/>
+  <text class="lbl" x="58" y="178">frontend</text>
+  <text class="meta" x="58" y="196">Next.js + CopilotKit</text>
+  <text class="meta" x="58" y="210">:80 → :3000</text>
+
+  <!-- inference -->
+  <rect class="box" x="330" y="150" width="210" height="70" stroke="#39d0d8"/>
+  <text class="lbl" x="348" y="178">inference</text>
+  <text class="meta" x="348" y="196">LangGraph agent</text>
+  <text class="meta" x="348" y="210">:8001 /api/v1</text>
+
+  <!-- tools -->
+  <rect class="box" x="330" y="300" width="210" height="70" stroke="#ffb454"/>
+  <text class="lbl" x="348" y="328">tools</text>
+  <text class="meta" x="348" y="346">FastMCP server</text>
+  <text class="meta" x="348" y="360">:8002 /mcp</text>
+
+  <!-- LLM -->
+  <rect class="ext" x="640" y="150" width="300" height="70" rx="10"/>
+  <text class="lbl" x="660" y="178">Ollama · Qwen (local)</text>
+  <text class="meta" x="660" y="196">token gen + tool-calling</text>
+  <text class="meta" x="660" y="210">host.docker.internal:11434</text>
+
+  <!-- external APIs -->
+  <rect class="ext" x="640" y="300" width="300" height="70" rx="10"/>
+  <text class="lbl" x="660" y="326">External APIs</text>
+  <text class="meta" x="660" y="344">geocode.maps.co · api.weather.gov</text>
+
+  <!-- backend -->
+  <rect class="box" x="40" y="420" width="210" height="70" stroke="#3fb950"/>
+  <text class="lbl" x="58" y="448">backend</text>
+  <text class="meta" x="58" y="466">Django + ninja</text>
+  <text class="meta" x="58" y="480">:8000 /api/v1/chats</text>
+
+  <!-- database -->
+  <rect class="box" x="330" y="420" width="210" height="70" stroke="#7c93ff"/>
+  <text class="lbl" x="348" y="448">database</text>
+  <text class="meta" x="348" y="466">PostgreSQL</text>
+  <text class="meta" x="348" y="480">:5432 (volume)</text>
+
+  <!-- edges -->
+  <line class="edge" x1="115" y1="86" x2="115" y2="148"/>
+  <text class="edgelbl" x="122" y="120">HTTP :80</text>
+
+  <line class="edge" x1="230" y1="185" x2="328" y2="185"/>
+  <text class="edgelbl" x="236" y="178">/api/copilotkit</text>
+
+  <line class="edge" x1="540" y1="178" x2="638" y2="178"/>
+  <text class="edgelbl" x="548" y="171">LLM calls</text>
+
+  <line class="edge" x1="435" y1="220" x2="435" y2="298"/>
+  <text class="edgelbl" x="442" y="262">MCP tools</text>
+
+  <line class="edge" x1="540" y1="335" x2="638" y2="335"/>
+  <text class="edgelbl" x="548" y="328">fetch</text>
+
+  <line class="edge" x1="250" y1="455" x2="328" y2="455"/>
+  <text class="edgelbl" x="256" y="448">SQL</text>
+
+  <!-- backend/inference persistence gap (dashed) -->
+  <line class="edge" x1="145" y1="220" x2="145" y2="418" stroke-dasharray="5 4"/>
+  <text class="edgelbl" x="150" y="330">chat persistence</text>
+  <text class="edgelbl" x="150" y="346">(wiring = our gap)</text>
+</svg>
+<div class="legend">Solid = wired in the published docs. Dashed = integration gap we will close (chat history → backend → Postgres). Dashed boxes = external dependencies outside the stack.</div>
+</div>
+
+<h2>3 · The 5 services</h2>
+<div class="cards">
+  <div class="card">
+    <h3>1 · database</h3>
+    <span class="pill tag-db">alpine 3.23 + Postgres</span><span class="pill">:5432</span>
+    <p>First-boot <code>initdb</code>, listens on <code>*</code>, MD5 auth, named volume <code>squidfall_database</code>. Profiles: <em>all, backend, database</em>.</p>
+    <p class="sub">⚠ <code>host all all 0.0.0.0/0 md5</code> is wide-open — local only; tighten before deploy.</p>
+  </div>
+  <div class="card">
+    <h3>2 · backend</h3>
+    <span class="pill tag-be">Django + ninja</span><span class="pill">:8000</span>
+    <p><code>chats</code> app: <code>Chat(session_id, message)</code>; API <code>GET /{id}</code>, <code>GET /</code>, <code>POST /</code>. <code>DB_ENGINE=postgres</code> → Postgres, else SQLite (so CI needs no DB). Profiles: <em>all, backend</em>.</p>
+  </div>
+  <div class="card">
+    <h3>3 · tools</h3>
+    <span class="pill tag-tl">FastMCP</span><span class="pill">:8002 /mcp</span>
+    <p>MCP server over streamable-HTTP. Tools: <code>get_coordinates</code> (geocode.maps.co), <code>get_forecast</code> (api.weather.gov). Needs <code>GEOCODING_API_KEY</code>. Profiles: <em>all, inference, tools</em>.</p>
+  </div>
+  <div class="card">
+    <h3>4 · inference</h3>
+    <span class="pill tag-inf">LangGraph ReAct + AG-UI</span><span class="pill">:8001</span>
+    <p>ReAct agent served over AG-UI (<code>ag-ui-langgraph</code>); <strong>local Ollama <code>qwen2.5</code></strong> via <code>ChatOllama</code> on the <strong>native</strong> API (not <code>/v1</code>); MCP tools from <code>TOOLS_ENDPOINT</code>. Profiles: <em>all, inference</em>.</p>
+    <p class="sub">Compiled with an <code>InMemorySaver</code> checkpointer (AG-UI calls <code>aget_state()</code> each run). Needs <code>langchain&nbsp;≥&nbsp;1.2</code>.</p>
+  </div>
+  <div class="card">
+    <h3>5 · frontend</h3>
+    <span class="pill tag-fe">Next.js 16 + CopilotKit</span><span class="pill">:80 → :3000</span>
+    <p>App Router/TS/Tailwind with a <strong>liquid-glass UI</strong> (aurora + frosted glass, from the Walking Trader terminal). <code>/api/copilotkit</code> → <code>LangGraphHttpAgent</code> → <code>squidfall-inference:8001/api/v1</code>. Standalone output. Profiles: <em>all, frontend</em>.</p>
+  </div>
+</div>
+
+<h2>4 · Orchestration</h2>
+<p><strong>Makefile</strong> / <strong><code>sf.ps1</code></strong> (the PowerShell wrapper, since <code>make</code> isn't installed here) are the control surface — <code>build</code> / <code>start</code> / <code>stop</code> / <code>status</code> with <code>DOCKER_COMPOSE_PROFILE</code> selecting scope and <code>COMPOSE_BAKE=true</code> for parallel builds. <strong><code>compose.yml</code></strong> defines the 5 services + volume; <code>profiles:</code> gate which come up; <code>database</code> has a healthcheck and <code>backend</code> waits on it.</p>
+<pre>./sf.ps1 build database     # build just the db image
+./sf.ps1 start database     # bring it up
+./sf.ps1 start all          # bring up the whole stack</pre>
+
+<h2>5 · CI/CD we are adding <span class="sub">(the blank doc pages)</span></h2>
+<p>The published <strong>CI, CD, Platform Resources, Deployment, Documentation</strong> pages are empty stubs (<code>Step 1. Text goes here.</code>). We design and build them locally.</p>
+<div class="cards">
+  <div class="card"><h3>CI — push / PR</h3>
+    <p>Build 5 images → backend tests on SQLite (no DB needed) → lint (ruff/eslint) → <strong>Trivy</strong> image scan → smoke tests (backend POST, inference health, tools MCP handshake).</p></div>
+  <div class="card"><h3>CD — merge / tag</h3>
+    <p>Tag images by SHA → push to <strong>local registry</strong> → deploy via <code>make ... start</code> → post-deploy health gate → rollback on failure.</p></div>
+  <div class="card"><h3>Local git runner — chosen</h3>
+    <p><strong>GitHub repo + self-hosted Actions runner.</strong> GitHub stores code &amp; fires triggers; every build/scan/deploy runs on our hardware (<code>runs-on: [self-hosted]</code>) to limit exposure.</p></div>
+</div>
+
+<h2>6 · Build roadmap</h2>
+<table class="roadmap">
+  <tr><th>Phase</th><th>Goal</th><th>Output</th></tr>
+  <tr><td>0</td><td>Scaffolding + architecture docs</td><td>✅ done</td></tr>
+  <tr><td>1</td><td>Build &amp; run app locally</td><td>✅ <strong>done</strong> — 5 containers built + running, weather chat verified E2E, glass UI</td></tr>
+  <tr><td>2</td><td>GitHub repo + self-hosted runner</td><td>⏭ next — git init, push, register runner, hello-world workflow</td></tr>
+  <tr><td>3</td><td>CI pipeline</td><td>build + test + lint + Trivy scan</td></tr>
+  <tr><td>4</td><td>CD pipeline</td><td>local registry + versioned images + auto deploy + health gate</td></tr>
+  <tr><td>5</td><td>Author blank doc pages</td><td>real CI / CD / Platform / Deployment / Documentation content</td></tr>
+  <tr><td>6</td><td>Platform + deployment hardening</td><td>secrets, network/auth tightening, prod-like target</td></tr>
+</table>
+
+<h2>7 · Decisions to settle</h2>
+<div class="note" style="border-left-color:var(--ok)">1 · ✅ <strong>LLM</strong> — RESOLVED: <strong>local Ollama + Qwen</strong> (<code>qwen2.5</code>) over the OpenAI-compatible endpoint; Azure left as a disabled toggle.</div>
+<div class="note" style="border-left-color:var(--ok)">2 · ✅ <strong>Git runner</strong> — RESOLVED: <strong>GitHub repo + self-hosted Actions runner</strong>; all build/scan/deploy compute stays local to limit exposure.</div>
+<div class="note" style="border-left-color:var(--ok)">3 · ✅ <strong><code>GEOCODING_API_KEY</code></strong> — obtained from geocode.maps.co, in <code>tools/.env</code> (gitignored), verified.</div>
+<div class="note" style="border-left-color:var(--ok)">4 · ✅ <strong>Host</strong> — this Windows box (Docker Desktop 29 / Compose v5).</div>
+
+<h2>8 · Bugs found &amp; fixed</h2>
+<p class="sub">Reference-doc bugs (all fixed in our build):</p>
+<table>
+  <tr><th>Where</th><th>Bug</th><th>Fix</th></tr>
+  <tr><td><code>inference/main.py</code></td><td>Copy-paste of <code>tools/main.py</code> (ends <code>port=8002</code>)</td><td>Write real LangGraph + CopilotKit agent on <code>:8001 /api/v1</code></td></tr>
+  <tr><td>Frontend Step 12</td><td><code>route.txt</code> under <code>app/api/copilot/</code></td><td><code>route.ts</code> under <code>app/api/copilotkit/</code></td></tr>
+  <tr><td>Frontend Dockerfile</td><td><code>node_alpine:24</code></td><td><code>node:24-alpine</code></td></tr>
+  <tr><td><code>inference/.env</code></td><td><code>https://.openai.azure.us/</code> (no host)</td><td>Real endpoint, or local LLM</td></tr>
+  <tr><td>Makefile recipes</td><td>Shown with 4 spaces</td><td><code>make</code> needs a literal TAB</td></tr>
+  <tr><td>Backend Step 20</td><td>Sentence cut off</td><td><code>python manage.py makemigrations chats</code></td></tr>
+  <tr><td>database <code>entrypoint.sh</code></td><td><code>--pwfile=/dev/null</code> → empty superuser password, but clients use <code>PGPASSWORD=postgres</code></td><td>Init superuser with the real password</td></tr>
+  <tr><td>database <code>entrypoint.sh</code></td><td>The <code>squidfall</code> database is never created (only default cluster DBs)</td><td>Create <code>$PGDATABASE</code> on first boot so Django can migrate</td></tr>
+</table>
+<p class="sub">Runtime bugs found while building (fixed):</p>
+<table>
+  <tr><th>Symptom</th><th>Root cause</th><th>Fix</th></tr>
+  <tr><td>inference build <code>ResolutionImpossible</code></td><td>pin <code>langchain&lt;0.4</code> vs <code>ag-ui-langgraph 0.0.41</code> needing langchain ≥ 1.2</td><td>drop the ceiling → the 1.x set</td></tr>
+  <tr><td>backend <code>connection refused</code> to db</td><td><code>migrate</code> raced first-boot <code>initdb</code>/<code>createdb</code></td><td>DB healthcheck + <code>depends_on: service_healthy</code> + entrypoint wait</td></tr>
+  <tr><td>chat <code>INCOMPLETE_STREAM: terminated</code></td><td>AG-UI <code>aget_state()</code> with no checkpointer</td><td><code>create_react_agent(…, checkpointer=InMemorySaver())</code></td></tr>
+  <tr><td><code>get_coordinates</code> 401</td><td><code>GEOCODING_API_KEY</code> empty</td><td>add key to <code>tools/.env</code>, reload tools</td></tr>
+</table>
+
+<footer>
+  Living document · companion to <code>ARCHITECTURE.md</code> · open in any browser, no internet needed.<br>
+  Phase 1 complete (app runs locally, weather chat verified). Next: Phase 2 — GitHub repo + self-hosted Actions runner.
+</footer>
+
+</div>
+</body>
+</html>

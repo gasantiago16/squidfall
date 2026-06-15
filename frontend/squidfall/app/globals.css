@@ -1,0 +1,120 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Squidfall — liquid glass theme
+   Adapted from the Walking Trader terminal (aurora + frosted glass).
+   ============================================================ */
+
+:root {
+  color-scheme: dark;
+
+  --glass-bg: rgba(16, 22, 38, 0.42);
+  --glass-bg-strong: rgba(14, 19, 34, 0.62);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-highlight: rgba(255, 255, 255, 0.28);
+
+  --ink: #e8edf7;
+  --ink-dim: #8b96ad;
+  --ink-faint: #5b6478;
+
+  --green: #4ade9c;
+  --red: #fb7185;
+  --amber: #fbbf24;
+  --cyan: #67e8f9;
+  --violet: #a78bfa;
+
+  --radius: 18px;
+  --mono: "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+
+  /* keep Next's generated tokens pointed at the glass theme */
+  --background: #070a14;
+  --foreground: var(--ink);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  min-height: 100%;
+  background: #070a14;
+  color: var(--ink);
+  font: 14px/1.5 -apple-system, "Segoe UI", Inter, Roboto, sans-serif;
+}
+
+/* ---------- aurora backdrop ---------- */
+.aurora { position: fixed; inset: 0; z-index: 0; filter: blur(70px) saturate(140%); pointer-events: none; }
+.blob { position: absolute; border-radius: 50%; opacity: 0.55; will-change: transform; }
+.b1 { width: 55vw; height: 55vw; left: -12vw; top: -18vh;
+      background: radial-gradient(circle, #16337a 0%, transparent 65%);
+      animation: drift1 38s ease-in-out infinite alternate; }
+.b2 { width: 45vw; height: 45vw; right: -10vw; top: 6vh;
+      background: radial-gradient(circle, #0e5a52 0%, transparent 65%);
+      animation: drift2 47s ease-in-out infinite alternate; }
+.b3 { width: 40vw; height: 40vw; left: 22vw; bottom: -22vh;
+      background: radial-gradient(circle, #4c1d95 0%, transparent 65%);
+      animation: drift3 52s ease-in-out infinite alternate; }
+.b4 { width: 26vw; height: 26vw; right: 18vw; bottom: 4vh;
+      background: radial-gradient(circle, #7c2d4f 0%, transparent 65%);
+      animation: drift1 61s ease-in-out infinite alternate-reverse; }
+@keyframes drift1 { to { transform: translate(9vw, 7vh) scale(1.12); } }
+@keyframes drift2 { to { transform: translate(-7vw, 10vh) scale(0.92); } }
+@keyframes drift3 { to { transform: translate(6vw, -8vh) scale(1.08); } }
+
+.noise { position: fixed; inset: 0; z-index: 1; pointer-events: none; opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E"); }
+
+/* ---------- glass primitive ---------- */
+.glass {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
+  backdrop-filter: blur(22px) saturate(170%);
+  border: 1px solid var(--glass-border);
+  border-top-color: var(--glass-highlight);
+  border-radius: var(--radius);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* ---------- topbar ---------- */
+.topbar {
+  position: fixed; top: 14px; left: 14px; right: 14px; z-index: 50;
+  height: 54px; display: flex; align-items: center; gap: 18px; padding: 0 18px;
+}
+.brand { display: flex; align-items: baseline; gap: 9px; white-space: nowrap; }
+.orb { width: 11px; height: 11px; border-radius: 50%; align-self: center;
+  background: radial-gradient(circle at 32% 30%, #c7f5ff, var(--cyan) 60%, #0b6b85);
+  box-shadow: 0 0 14px var(--cyan); animation: pulse 2.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.55; } }
+.brand-name { font-weight: 700; letter-spacing: 0.16em; font-size: 13px; }
+.brand-sub { color: var(--ink-dim); font-size: 11px; letter-spacing: 0.08em; }
+.top-right { margin-left: auto; display: flex; align-items: center; gap: 12px; white-space: nowrap; }
+.pill { font-size: 11px; padding: 4px 11px; border-radius: 999px;
+  border: 1px solid var(--glass-border); color: var(--ink-dim); background: rgba(255,255,255,0.04); }
+.pill.ok { color: var(--green); border-color: rgba(74,222,156,0.4); }
+.clock { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); }
+
+/* ---------- shell / hero ---------- */
+.shell { position: relative; z-index: 10; min-height: 100dvh; padding: 96px 20px 40px;
+  display: flex; flex-direction: column; align-items: center; }
+.hero { width: 100%; max-width: 760px; padding: 42px 42px 32px; margin-top: 4vh; }
+.hero h1 { font-size: clamp(34px, 6vw, 56px); line-height: 1.04; letter-spacing: -0.02em; font-weight: 700;
+  background: linear-gradient(120deg, #ffffff, var(--cyan) 55%, var(--violet));
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero .tag { margin-top: 16px; color: var(--ink-dim); font-size: 16px; line-height: 1.6; max-width: 56ch; }
+.chips { margin-top: 26px; display: flex; flex-wrap: wrap; gap: 10px; }
+.chip { font-size: 13px; padding: 9px 14px; border-radius: 12px; color: var(--ink);
+  border: 1px solid var(--glass-border); background: rgba(255,255,255,0.045);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); transition: border-color .2s, background .2s; }
+.chip:hover { border-color: rgba(103,232,249,0.4); background: rgba(103,232,249,0.08); }
+.chip .ico { margin-right: 7px; }
+.hint { margin-top: 30px; display: flex; align-items: center; gap: 9px; color: var(--ink-faint); font-size: 13px; }
+.hint .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 10px var(--cyan); animation: pulse 2.6s ease-in-out infinite; }
+
+.foot { margin-top: 26px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,0.06);
+  color: var(--ink-faint); font-size: 11px; letter-spacing: 0.04em; }
+.foot code { color: var(--ink-dim); font-family: var(--mono); }
+
+/* ---------- scrollbars ---------- */
+* { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.15) transparent; }
+
+/* CopilotKit v2 ships compiled Tailwind utilities (no semantic theme tokens),
+   so color-scheme:dark above is what keeps the assistant panel from rendering
+   stark white against the aurora. Deeper retheming is a follow-up. */

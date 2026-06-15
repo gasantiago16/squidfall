@@ -1,0 +1,194 @@
+# Squidfall — Architecture Breakdown
+
+> Local rebuild of the Army AI2C / CDSO **Squidfall** reference app, with a **fully-local CI/CD pipeline** driven by a self-hosted GitHub Actions runner.
+> Source docs: `https://deathlabs.github.io/squidfall/` (mirror of `https://pages.cdso.army.mil/ai2c/squidfall/docs/`).
+> This is *our* working architecture — what the published docs describe **plus** the parts we filled in ourselves (the empty CI/CD/Platform/Deployment/Documentation pages) and every fix we made to get it actually running.
+
+> **Status — ✅ Phase 1 complete.** All 5 containers build, run, and a weather chat works **end-to-end** (verified: "weather in Pittsburgh, PA" → live geocode → live NWS forecast → streamed answer on both `http://localhost` and the dev server). The frontend carries a liquid-glass UI. **Next: Phase 2** — GitHub repo + self-hosted Actions runner.
+
+---
+
+## 1. What Squidfall is
+
+A **containerized, agentic AI chat application**. The shipped example is a **weather assistant**:
+
+1. A user chats in a web UI.
+2. An LLM **agent** decides when it needs real-world data.
+3. It calls **tools** over MCP to geocode a place and pull a forecast from `api.weather.gov`.
+4. Chat history can persist to **PostgreSQL** via a Django REST API.
+
+Everything runs as **5 Docker containers**, orchestrated locally by a **Makefile + `compose.yml`** using **Compose profiles** (so you can bring up one service or the whole stack).
+
+---
+
+## 2. The 5 services at a glance
+
+| # | Service (container) | Stack | Image base | Port | Compose profiles | Role |
+|---|---------------------|-------|-----------|------|------------------|------|
+| 1 | `database` (`squidfall-database`) | PostgreSQL | `alpine:3.23` | 5432 | `all, backend, database` | Persist chat history |
+| 2 | `backend` (`squidfall-backend`) | Django + django-ninja + psycopg2 | `python:3.12-slim` | 8000 | `all, backend` | REST API (`/api/v1/chats/`) |
+| 3 | `tools` (`squidfall-tools`) | FastMCP (MCP server) | `python:3.12-slim` | 8002 | `all, inference, tools` | `get_coordinates`, `get_forecast` |
+| 4 | `inference` (`squidfall-inference`) | LangGraph ReAct + AG-UI + langchain-ollama | `python:3.12-slim` | 8001 | `all, inference` | The agent loop |
+| 5 | `frontend` (`squidfall-frontend`) | Next.js 16 + CopilotKit + liquid-glass UI | `node:24-alpine` | 80→3000 | `all, frontend` | Chat web UI |
+
+All containers join the default Compose network and reach each other by **container name** (e.g. `squidfall-database`, `squidfall-tools`, `squidfall-inference`).
+
+---
+
+## 3. Service detail
+
+### 3.1 `database`
+- **Base:** `alpine:3.23`, Postgres + contrib via `apk`.
+- **Entrypoint (`entrypoint.sh`) — corrected from the reference:** on **first boot only** it runs `initdb` with the **real** superuser password (`$PGPASSWORD`), enables `listen_addresses='*'` + `host all all 0.0.0.0/0 md5`, then **creates the `$PGDATABASE` (`squidfall`) database** via a temporary socket-only server before `exec postgres`. Idempotent on restart (skips init if `PG_VERSION` exists).
+- **Data:** named volume `squidfall_database` → `/var/lib/postgresql/data`.
+- **Healthcheck:** `pg_isready -h 127.0.0.1` (TCP, so it only passes once the *real* server is up — not the socket-only init server). `backend` gates on `condition: service_healthy`.
+- **Env (`database/.env`):** `PGPASSWORD=postgres`, `PGDATABASE=squidfall`.
+- ⚠️ Auth is wide open (`0.0.0.0/0 md5`) — fine for local dev, **must be tightened** before any real deploy (Phase 6).
+
+### 3.2 `backend`
+- **Stack:** Django project `squidfall` + app `chats`, API via **django-ninja**.
+- **Model:** `Chat(session_id, message)`.
+- **API (`/api/v1/chats/`):** `GET /{session_id}`, `GET /` (optional filter), `POST /` (create). Verified: `POST` → `{"message_id": 1}`.
+- **DB switch:** `DB_ENGINE=postgres` → Postgres; **otherwise SQLite** — deliberately so the container can run in CI **without a database dependency**.
+- **Entrypoint:** waits for the DB TCP port (belt-and-suspenders with the compose healthcheck) → `python manage.py migrate` → `uvicorn squidfall.asgi:application :8000`.
+- **Env (`backend/.env`):** `DB_ENGINE`, `PGHOST=squidfall-database`, `PGDATABASE`, `PGPORT`, `PGSSLMODE=disable`, `PGUSER`, `PGPASSWORD`.
+
+### 3.3 `tools`
+- **Stack:** **FastMCP** server, `transport="streamable-http"`, host `0.0.0.0`, port `8002`, mount `/mcp`.
+- **Tools exposed over MCP:**
+  - `get_coordinates(location)` → `geocode.maps.co/search` (needs `GEOCODING_API_KEY`).
+  - `get_forecast(lat, lon)` → `api.weather.gov/points/...` → forecast (US-only).
+- **Env (`tools/.env`, gitignored):** `GEOCODING_API_KEY` — **configured and verified** (real geocode results flowing).
+
+### 3.4 `inference`
+- **Stack:** a LangGraph **ReAct** agent (`langgraph.prebuilt.create_react_agent`) served over the **AG-UI protocol** via `ag-ui-langgraph` (`LangGraphAgent` + `add_langgraph_fastapi_endpoint(app, agent, "/api/v1")`), FastAPI/uvicorn on `8001`.
+- **LLM (our build):** local Ollama **`qwen2.5`** via **`langchain_ollama.ChatOllama` on the NATIVE API** (`http://host.docker.internal:11434`) — **not** the OpenAI-compatible `/v1` path (Ollama has an open bug where tool-calls + streaming break on `/v1`). `OLLAMA_NUM_CTX=8192`. Azure Gov OpenAI is a disabled toggle (`USE_AZURE=true` → `AzureChatOpenAI`).
+- **Tools:** loaded over MCP with `langchain-mcp-adapters` `MultiServerMCPClient` (`transport: "streamable_http"`) from `TOOLS_ENDPOINT=http://squidfall-tools:8002/mcp`; a startup retry loop tolerates the tools container still booting.
+- **Checkpointer (load-bearing):** the agent is compiled with `InMemorySaver`. The AG-UI adapter calls `graph.aget_state()` on every run; without a checkpointer it raises `ValueError: No checkpointer set` → the browser sees `INCOMPLETE_STREAM`.
+- **Resolved dependency set (pinned where it matters):** `ag-ui-langgraph==0.0.41`, `langchain-mcp-adapters==0.3.0`, `langchain-ollama` 1.1.0, `langgraph` 1.2.5, **`langchain` 1.x** — note `ag-ui-langgraph 0.0.41` requires **langchain ≥ 1.2** (the 0.3 line is a hard conflict).
+
+### 3.5 `frontend`
+- **Stack:** Next.js 16 (App Router, TS, Tailwind) + `@copilotkit/runtime` + `@copilotkit/react-core` (v2 `CopilotSidebar`) + `@copilotkit/react-ui`.
+- **UI:** a **liquid-glass** theme adapted from the Walking Trader terminal — aurora backdrop (drifting blobs under a 70px blur), frosted `.glass` panels, a topbar with a pulsing orb + live UTC clock, and a glass hero. (CopilotKit's v2 sidebar ships compiled Tailwind utilities with no semantic theme tokens, so it's set to `color-scheme: dark` rather than fully re-skinned — a possible follow-up.)
+- **Route `app/api/copilotkit/route.ts`:** `CopilotRuntime` + `LangGraphHttpAgent` → `LANGGRAPH_DEPLOYMENT_URL`. In the container that's `http://squidfall-inference:8001/api/v1` (env_file); the dev server falls back to `http://localhost:8001/api/v1`.
+- **Build:** multi-stage `node:24-alpine` (with `libc6-compat` for Next's SWC), `output: "standalone"`, served by `node server.js` on `3000` (host `:80`).
+
+---
+
+## 4. Runtime data flow
+
+```
+[Browser]
+   │  HTTP :80
+   ▼
+[frontend] Next.js + CopilotKit runtime (liquid-glass UI)
+   │  POST /api/copilotkit  → LangGraphHttpAgent (AG-UI)
+   ▼
+[inference] LangGraph ReAct agent :8001 /api/v1   (InMemorySaver checkpointer)
+   ├──► [Ollama · qwen2.5]  host.docker.internal:11434   (token gen + tool-calling)
+   └──► [tools] MCP :8002 /mcp
+            ├──► geocode.maps.co      (get_coordinates, needs key)
+            └──► api.weather.gov      (get_forecast, US-only)
+
+[backend] Django API :8000  ──►  [database] PostgreSQL :5432   (chat persistence)
+```
+
+**Note (open integration gap):** the frontend wires to **inference** (the agent), while **backend + database** are a separate chat-persistence REST layer **not** wired into the chat flow. Persisting chat history end-to-end (frontend/inference → backend → Postgres) remains a deliberate future enhancement.
+
+---
+
+## 5. Orchestration
+
+- **`Makefile`** — `make` (build) / `start` / `stop` / `status`, with `DOCKER_COMPOSE_PROFILE` selecting scope and `export COMPOSE_BAKE=true` for parallel builds.
+- **`sf.ps1`** — a PowerShell wrapper with the same verbs, because **`make` is not installed** on this Windows box: `./sf.ps1 start all`, `./sf.ps1 build inference`, etc.
+- **`compose.yml`** — 5 services + named volume `squidfall_database`; `profiles:` gate which come up; `database` has a healthcheck and `backend` waits on it.
+
+---
+
+## 6. CI/CD — what *we* are adding (the blank pages)
+
+The published **Continuous Integration, Continuous Delivery, Platform Resources, Deployment, and Documentation** pages are all empty stubs (`Step 1. Text goes here.`). We design and build these locally.
+
+### 6.1 Continuous Integration (CI) — on every push / PR
+- Build the 5 images (parallel via Compose Bake).
+- **Backend tests** with **no `DB_ENGINE`** → SQLite, so CI needs no live Postgres.
+- Lint / format (ruff for Python, eslint for frontend).
+- **Container vulnerability scan** (Trivy) on each image.
+- Smoke tests: backend `POST /api/v1/chats/`, inference `/api/v1/health`, tools MCP handshake.
+
+### 6.2 Continuous Delivery (CD) — on merge to `main` / tag
+- Re-tag images with version/commit SHA → push to a **local container registry** → deploy via Compose → post-deploy health gate → roll back on failure.
+
+### 6.3 Local git runner — **CHOSEN**
+- **Repo:** hosted on **GitHub.com** (code + workflow YAML).
+- **Compute:** a **self-hosted GitHub Actions runner** on our own machine — every build, scan, image push, and deploy runs on our hardware, never on GitHub-hosted runners. GitHub stores the code and fires triggers; the runner (and the Docker daemon, local registry, deploy target) stays private. Workflows live in `.github/workflows/` with `runs-on: [self-hosted]`.
+
+---
+
+## 7. Build roadmap
+
+| Phase | Goal | Status |
+|------|------|--------|
+| **0** | Scaffolding + architecture docs | ✅ done |
+| **1** | Build & run the app locally | ✅ **done — 5 containers built + running, weather chat verified E2E, glass UI** |
+| **2** | GitHub repo + self-hosted Actions runner | ⏭ next — `git init`, push, register runner, hello-world workflow |
+| **3** | CI pipeline | build + test + lint + Trivy scan on push/PR |
+| **4** | CD pipeline | local registry + versioned images + auto deploy + health gate |
+| **5** | Author the blank doc pages | real content for CI / CD / Platform / Deployment / Documentation |
+| **6** | Platform Resources + hardening | secrets, tighten Postgres auth off `0.0.0.0/0`, prod-like target |
+
+---
+
+## 8. Decisions (all resolved)
+
+1. ✅ **LLM** — local Ollama + **`qwen2.5`** via `ChatOllama` (native API); Azure a disabled toggle.
+2. ✅ **Git runner** — **GitHub repo + self-hosted Actions runner** (compute stays local).
+3. ✅ **`GEOCODING_API_KEY`** — obtained from geocode.maps.co, in `tools/.env` (gitignored), verified.
+4. ✅ **Host** — this Windows box (Docker Desktop 29 / Compose v5).
+
+### Reference-doc integration gaps — **FIXED during Phase 1**
+- **DB password mismatch** (reference `initdb --pwfile=/dev/null` → empty password) → init with the real `$PGPASSWORD`.
+- **`squidfall` DB never created** → created on first boot via a temporary server.
+- **`.env` `export` ambiguity** → `.env` files are plain `KEY=val`; shell-source with `set -a; . ./x/.env; set +a`.
+- **`inference/main.py` was the tools server by mistake** → rewritten as the real LangGraph + AG-UI agent.
+
+---
+
+## 9. Bugs found & fixed
+
+### 9a. Reference-doc bugs (all fixed in our build)
+| Where | Bug | Fix |
+|------|-----|-----|
+| `inference/main.py` | Copy-paste of `tools/main.py` (ends `port=8002`) | Real LangGraph + AG-UI agent on `:8001 /api/v1` |
+| Frontend Step 12 | `route.txt` under `app/api/copilot/` | `route.ts` under `app/api/copilotkit/` |
+| Frontend Dockerfile | `node_alpine:24` | `node:24-alpine` (+ `libc6-compat`) |
+| `inference/.env` | `https://.openai.azure.us/` (no host) | Swapped to local Ollama |
+| Makefile recipes | shown with 4 spaces | literal TABs (and added `sf.ps1` since `make` is absent) |
+| Backend Step 20 | sentence cut off | `python manage.py makemigrations chats` |
+
+### 9b. Runtime bugs found while building (fixed)
+| Symptom | Root cause | Fix |
+|---------|-----------|-----|
+| `pip` `ResolutionImpossible` on inference build | researched pin `langchain<0.4` vs `ag-ui-langgraph 0.0.41` needing **langchain ≥ 1.2** | dropped the ceiling → resolver picks the 1.x set |
+| `backend` crash: `connection refused` to db | `migrate` raced first-boot `initdb`/`createdb` | DB healthcheck + `depends_on: service_healthy` + entrypoint TCP wait |
+| Browser chat: `INCOMPLETE_STREAM: terminated` | AG-UI calls `graph.aget_state()` but agent had **no checkpointer** | compile `create_react_agent(..., checkpointer=InMemorySaver())` |
+| `get_coordinates` 401 Unauthorized | `GEOCODING_API_KEY` empty | added the key to `tools/.env`, reloaded `tools` |
+| (avoided) Ollama tools + streaming break | open Ollama bug on the `/v1` path | use `ChatOllama` native API, not `ChatOpenAI`+`/v1` |
+
+---
+
+## 10. How to run it
+
+```powershell
+ollama pull qwen2.5                 # one-time (the 7B; tool-capable)
+./sf.ps1 start all                  # build images if needed, bring up all 5
+./sf.ps1 status all                 # confirm Up / healthy
+# open http://localhost  → ask "What's the weather in Pittsburgh, PA?"
+./sf.ps1 stop all                   # tear down
+```
+
+Geocoding key (for arbitrary places): copy `tools/.env.example` → `tools/.env`, set `GEOCODING_API_KEY`, then `docker compose up -d tools`.
+
+---
+
+*Living document. Companion: `architecture.html` (same content, browsable, with the system diagram). Phase 1 done; Phase 2 (CI/CD on a self-hosted runner) next.*

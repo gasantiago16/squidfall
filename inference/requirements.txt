@@ -1,0 +1,14 @@
+# ag-ui-langgraph 0.0.41 requires langchain>=1.2, so let the 1.x line resolve
+# instead of pinning the old 0.3 series (that was a ResolutionImpossible conflict).
+ag-ui-langgraph==0.0.41
+langchain-mcp-adapters==0.3.0
+langchain-ollama
+langgraph
+langchain
+fastapi
+uvicorn
+pydantic
+
+# Azure OpenAI parity (inactive unless USE_AZURE=true)
+langchain-openai
+azure-identity

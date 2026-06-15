@@ -1,0 +1,78 @@
+services:
+
+  database:
+    profiles: [ all, backend, database ]
+    build: database
+    image: squidfall/database:latest
+    container_name: squidfall-database
+    ports:
+      - "5432:5432"
+    volumes:
+      - squidfall_database:/var/lib/postgresql/data
+    env_file:
+      - database/.env
+    # TCP check (-h forces it): during first-boot init the temp server is
+    # socket-only, so this only passes once the real server is accepting.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U postgres -d squidfall"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+
+  backend:
+    profiles: [ all, backend ]
+    build: backend
+    image: squidfall/backend:latest
+    container_name: squidfall-backend
+    depends_on:
+      database:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    env_file:
+      - backend/.env
+
+  tools:
+    profiles: [ all, inference, tools ]
+    build: tools
+    image: squidfall/tools:latest
+    container_name: squidfall-tools
+    ports:
+      - "8002:8002"
+    env_file:
+      - tools/.env
+
+  inference:
+    profiles: [ all, inference ]
+    build: inference
+    image: squidfall/inference:latest
+    container_name: squidfall-inference
+    depends_on:
+      - tools
+    ports:
+      - "8001:8001"
+    # Lets the container reach Ollama running on the host (works on Docker
+    # Desktop automatically; explicit mapping keeps it portable to Linux).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - inference/.env
+
+  frontend:
+    profiles: [ all, frontend ]
+    build:
+      context: frontend
+      args:
+        LANGGRAPH_DEPLOYMENT_URL: "http://squidfall-inference:8001/api/v1"
+    image: squidfall/frontend:latest
+    container_name: squidfall-frontend
+    depends_on:
+      - inference
+    ports:
+      - "80:3000"
+    env_file:
+      - frontend/.env
+
+volumes:
+  squidfall_database:
