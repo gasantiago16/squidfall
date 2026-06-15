@@ -48,7 +48,7 @@
   <h1>Squidfall — Architecture Breakdown</h1>
   <div class="sub">Local rebuild of the Army AI2C / CDSO <strong>Squidfall</strong> reference app, with a <strong>fully-local CI/CD pipeline</strong> on self-hosted git runners.</div>
   <div class="sub">Source: <a href="https://deathlabs.github.io/squidfall/">deathlabs.github.io/squidfall</a> (mirror of <code>pages.cdso.army.mil/ai2c/squidfall/docs</code>)</div>
-  <div class="note" style="border-left-color:var(--ok);margin-top:14px">✅ <strong>Phases 1–3 complete</strong> — 5 containers build &amp; run, weather chat verified end-to-end, liquid-glass frontend; public repo <a href="https://github.com/gasantiago16/squidfall">gasantiago16/squidfall</a> + self-hosted runner <code>squidfall-win</code>; CI green on every push (build · tests · ruff · Trivy). <strong>Next: Phase 4</strong> — the CD pipeline.</div>
+  <div class="note" style="border-left-color:var(--ok);margin-top:14px">✅ <strong>Phases 1–4 complete</strong> — 5 containers build &amp; run, weather chat verified end-to-end, liquid-glass frontend; public repo <a href="https://github.com/gasantiago16/squidfall">gasantiago16/squidfall</a> + self-hosted runner <code>squidfall-win</code>; CI green per push, CD on version tags deploys a prod-like stack (released <strong>v0.1.0</strong>). <strong>Next: Phase 5</strong> — author the upstream blank doc pages.</div>
 </header>
 
 <h2>1 · What Squidfall is</h2>
@@ -186,8 +186,8 @@
 <div class="cards">
   <div class="card"><h3>CI — ✅ live (<code>ci.yml</code>)</h3>
     <p>Build 5 images → Django check+tests on SQLite → tools/inference import checks → ruff (critical) → <strong>Trivy</strong> (report-only). Ephemeral <code>docker run</code> (no <code>compose up</code>) to avoid collisions.</p></div>
-  <div class="card"><h3>CD — merge / tag</h3>
-    <p>Tag images by SHA → push to <strong>local registry</strong> → deploy via <code>make ... start</code> → post-deploy health gate → rollback on failure.</p></div>
+  <div class="card"><h3>CD — ✅ live (<code>cd.yml</code>)</h3>
+    <p>On a <code>v*</code> tag: build → SHA-tag → push to <strong>local registry</strong> (<code>:5000</code>) → deploy <strong>prod-like</strong> <code>squidfall-prod</code> (ports <code>:8080/:18000/…</code>) → health gate → promote <code>:stable</code> → rollback on failure.</p></div>
   <div class="card"><h3>Local git runner — live</h3>
     <p><strong>GitHub repo + self-hosted Actions runner.</strong> Repo <code>gasantiago16/squidfall</code>; runner <code>squidfall-win</code> (<code>runs-on: [self-hosted, windows, x64]</code>) on our hardware. GitHub triggers; build/scan/deploy run locally to limit exposure.</p></div>
 </div>
@@ -199,8 +199,8 @@
   <tr><td>1</td><td>Build &amp; run app locally</td><td>✅ <strong>done</strong> — 5 containers built + running, weather chat verified E2E, glass UI</td></tr>
   <tr><td>2</td><td>GitHub repo + self-hosted runner</td><td>✅ <strong>done</strong> — public repo, runner <code>squidfall-win</code> online, hello-world green</td></tr>
   <tr><td>3</td><td>CI pipeline</td><td>✅ <strong>done</strong> — <code>ci.yml</code> green (build · tests · ruff · Trivy report-only)</td></tr>
-  <tr><td>4</td><td>CD pipeline</td><td>⏭ <strong>next</strong> — local registry + SHA-tagged images + deploy to prod-like project + health gate</td></tr>
-  <tr><td>5</td><td>Author blank doc pages</td><td>real CI / CD / Platform / Deployment / Documentation content</td></tr>
+  <tr><td>4</td><td>CD pipeline</td><td>✅ <strong>done</strong> — <code>cd.yml</code>: registry + SHA images + prod-like deploy + health gate + rollback (v0.1.0)</td></tr>
+  <tr><td>5</td><td>Author blank doc pages</td><td>⏭ <strong>next</strong> — real CI / CD / Platform / Deployment / Documentation content</td></tr>
   <tr><td>6</td><td>Platform + deployment hardening</td><td>secrets, network/auth tightening, prod-like target</td></tr>
 </table>
 

@@ -6,10 +6,11 @@ self-hosted runner) built out over later phases.
 
 **Repo:** <https://github.com/gasantiago16/squidfall> (public)
 
-> **Status: ✅ Phases 1–3 complete.** All 5 containers build and run; a weather chat works
+> **Status: ✅ Phases 1–4 complete.** All 5 containers build and run; a weather chat works
 > end-to-end (verified: *"weather in Pittsburgh, PA"* → live geocode → live NWS forecast →
-> streamed answer). The frontend has a liquid-glass UI. Public repo + self-hosted runner are
-> live, and CI is green on every push (build · tests · ruff · Trivy). **Next: Phase 4 (CD pipeline).**
+> streamed answer). The frontend has a liquid-glass UI. Public repo + self-hosted runner are live;
+> CI green on every push, and CD (on version tags) deploys a prod-like stack — released **v0.1.0**.
+> **Next: Phase 5 (author the upstream blank doc pages).**
 
 See **`ARCHITECTURE.md`** / **`architecture.html`** for the full breakdown, data flow, and bug log.
 
@@ -43,6 +44,12 @@ Per-service: `./sf.ps1 build|start|status|stop <database|backend|tools|inference
 Raw equivalent: `docker compose --profile <svc> build | up -d | down | ps`.
 If you install make (`winget install GnuWin32.Make`), the `Makefile` mirrors these verbs.
 
+## CI/CD (self-hosted runner)
+
+- **CI** (`.github/workflows/ci.yml`) — every push/PR: build all images, Django tests on SQLite, ruff (critical), Trivy (report-only). Ephemeral `docker run` checks (no `compose up`) so it never collides with a running stack.
+- **CD** (`.github/workflows/cd.yml`) — on a `v*` tag: build → SHA-tag → push to a local registry (`registry:2` @ `:5000`) → deploy the **prod-like** `squidfall-prod` project (`compose.prod.yml`, ports `:8080 / :18000 / :18001 / …`) → health gate → promote `:stable` → rollback on failure.
+- **Cut a release:** `git tag vX.Y.Z && git push origin vX.Y.Z`. Prod UI → <http://localhost:8080> (runs alongside dev on `:80`).
+
 ## Status
 
 - ✅ Orchestration — `Makefile`, `sf.ps1`, `compose.yml` (DB healthcheck gating backend)
@@ -53,7 +60,8 @@ If you install make (`winget install GnuWin32.Make`), the `Makefile` mirrors the
 - ✅ frontend — Next.js + CopilotKit + liquid-glass UI, on `:80`
 - ✅ Phase 2 — public GitHub repo + self-hosted runner (`squidfall-win`)
 - ✅ Phase 3 — CI pipeline green (`ci.yml`: build · Django tests · ruff · Trivy report-only)
-- ⬜ Phase 4 (CD) · Phase 5 (docs) · Phase 6 (hardening)
+- ✅ Phase 4 — CD pipeline (`cd.yml`): local registry + prod-like deploy (`compose.prod.yml`) + health gate + rollback; released v0.1.0
+- ⬜ Phase 5 (author upstream docs) · Phase 6 (hardening)
 
 ## Deliberate deviations from the reference docs (so it actually builds/runs)
 

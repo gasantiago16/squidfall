@@ -4,7 +4,7 @@
 > Source docs: `https://deathlabs.github.io/squidfall/` (mirror of `https://pages.cdso.army.mil/ai2c/squidfall/docs/`).
 > This is *our* working architecture — what the published docs describe **plus** the parts we filled in ourselves (the empty CI/CD/Platform/Deployment/Documentation pages) and every fix we made to get it actually running.
 
-> **Status — ✅ Phase 1 complete.** All 5 containers build, run, and a weather chat works **end-to-end** (verified: "weather in Pittsburgh, PA" → live geocode → live NWS forecast → streamed answer on both `http://localhost` and the dev server). The frontend carries a liquid-glass UI. **Phases 2–3 done** — public repo [`gasantiago16/squidfall`](https://github.com/gasantiago16/squidfall) + self-hosted runner `squidfall-win`; CI green on every push (build · Django tests · ruff · Trivy). **Next: Phase 4** — the CD pipeline (local registry + deploy to a separate prod-like project).
+> **Status — ✅ Phase 1 complete.** All 5 containers build, run, and a weather chat works **end-to-end** (verified: "weather in Pittsburgh, PA" → live geocode → live NWS forecast → streamed answer on both `http://localhost` and the dev server). The frontend carries a liquid-glass UI. **Phases 2–4 done** — public repo [`gasantiago16/squidfall`](https://github.com/gasantiago16/squidfall) + self-hosted runner `squidfall-win`; CI green on every push; CD on version tags deploys a separate prod-like stack (released **v0.1.0**). **Next: Phase 5** — author the upstream blank doc pages.
 
 ---
 
@@ -118,8 +118,12 @@ Runs on the self-hosted runner on every push / PR:
 - **Trivy** vuln scan (HIGH/CRITICAL) on saved image tars — report-only for now (ratchet to blocking in Phase 6).
 - Uses ephemeral `docker run` (not `compose up`) so CI never collides with a locally-running stack (fixed container names/ports). Full-stack integration testing lands in Phase 4 on the prod-like project.
 
-### 6.2 Continuous Delivery (CD) — on merge to `main` / tag
-- Re-tag images with version/commit SHA → push to a **local container registry** → deploy via Compose → post-deploy health gate → roll back on failure.
+### 6.2 Continuous Delivery (CD) — ✅ implemented (`.github/workflows/cd.yml`)
+On a version tag (`v*`) or manual dispatch, on the self-hosted runner:
+- Build → tag images by commit SHA → push to the **local registry** (`registry:2` on `localhost:5000`).
+- **Deploy** to a separate **prod-like Compose project** (`compose.prod.yml`, project `squidfall-prod`) that runs *alongside* dev — distinct container names, shifted host ports (frontend `:8080`, backend `:18000`, inference `:18001`, tools `:18002`, db `:15432`), its own volume, and **network aliases** (`squidfall-database`, …) so the committed `.env` files resolve unchanged.
+- **Health gate** (inference/frontend/backend all 200) → **promote** images to `:stable` → **roll back** to `:stable` on failure.
+- First release: **v0.1.0** (CD run green in ~46s).
 
 ### 6.3 Local git runner — **CHOSEN**
 - **Repo:** hosted on **GitHub.com** (code + workflow YAML).
@@ -136,8 +140,8 @@ Runs on the self-hosted runner on every push / PR:
 | **1** | Build & run the app locally | ✅ **done — 5 containers built + running, weather chat verified E2E, glass UI** |
 | **2** | GitHub repo + self-hosted Actions runner | ✅ **done** — public repo `gasantiago16/squidfall`, runner `squidfall-win` online, hello-world green |
 | **3** | CI pipeline | ✅ **done** — `.github/workflows/ci.yml` green (build · tests · ruff · Trivy report-only) |
-| **4** | CD pipeline | ⏭ **next** — local registry + SHA-tagged images + deploy to a separate prod-like project + health gate |
-| **5** | Author the blank doc pages | real content for CI / CD / Platform / Deployment / Documentation |
+| **4** | CD pipeline | ✅ **done** — `cd.yml`: registry + SHA images + prod-like deploy + health gate + rollback (released v0.1.0) |
+| **5** | Author the blank doc pages | ⏭ **next** — real content for CI / CD / Platform / Deployment / Documentation |
 | **6** | Platform Resources + hardening | secrets, tighten Postgres auth off `0.0.0.0/0`, prod-like target |
 
 ---
