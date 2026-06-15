@@ -48,7 +48,7 @@
   <h1>Squidfall — Architecture Breakdown</h1>
   <div class="sub">Local rebuild of the Army AI2C / CDSO <strong>Squidfall</strong> reference app, with a <strong>fully-local CI/CD pipeline</strong> on self-hosted git runners.</div>
   <div class="sub">Source: <a href="https://deathlabs.github.io/squidfall/">deathlabs.github.io/squidfall</a> (mirror of <code>pages.cdso.army.mil/ai2c/squidfall/docs</code>)</div>
-  <div class="note" style="border-left-color:var(--ok);margin-top:14px">✅ <strong>Phases 1–5 complete</strong> — 5 containers build &amp; run, weather chat verified end-to-end, liquid-glass frontend; public repo <a href="https://github.com/gasantiago16/squidfall">gasantiago16/squidfall</a> + self-hosted runner <code>squidfall-win</code>; CI green per push, CD on version tags deploys a prod-like stack (released <strong>v0.1.0</strong>); blank upstream doc pages authored in <code>docs/</code>, one-command WSL bootstrap <code>squidfall.sh</code> in place. <strong>Next: Phase 6</strong> — platform/security hardening.</div>
+  <div class="note" style="border-left-color:var(--ok);margin-top:14px">✅ <strong>All six phases complete</strong> — 5 containers build &amp; run, weather chat verified end-to-end, liquid-glass frontend; public repo <a href="https://github.com/gasantiago16/squidfall">gasantiago16/squidfall</a> + self-hosted runner <code>squidfall-win</code>; CI green per push, CD on version tags deploys a prod-like stack (released <strong>v0.1.0</strong>); docs authored in <code>docs/</code>, one-command WSL bootstrap <code>squidfall.sh</code>; hardened (SCRAM + private <code>pg_hba</code>, prod DB internal-only, Trivy blocking) and translated to GitLab CI (<code>.gitlab-ci.yml</code>).</div>
 </header>
 
 <h2>1 · What Squidfall is</h2>
@@ -150,7 +150,7 @@
     <h3>1 · database</h3>
     <span class="pill tag-db">alpine 3.23 + Postgres</span><span class="pill">:5432</span>
     <p>First-boot <code>initdb</code>, listens on <code>*</code>, MD5 auth, named volume <code>squidfall_database</code>. Profiles: <em>all, backend, database</em>.</p>
-    <p class="sub">⚠ <code>host all all 0.0.0.0/0 md5</code> is wide-open — local only; tighten before deploy.</p>
+    <p class="sub">🔒 Hardened: SCRAM auth + <code>pg_hba</code> limited to RFC1918 ranges (not <code>0.0.0.0/0</code>); prod DB has no host port. (Fresh volumes.)</p>
   </div>
   <div class="card">
     <h3>2 · backend</h3>
@@ -201,7 +201,7 @@
   <tr><td>3</td><td>CI pipeline</td><td>✅ <strong>done</strong> — <code>ci.yml</code> green (build · tests · ruff · Trivy report-only)</td></tr>
   <tr><td>4</td><td>CD pipeline</td><td>✅ <strong>done</strong> — <code>cd.yml</code>: registry + SHA images + prod-like deploy + health gate + rollback (v0.1.0)</td></tr>
   <tr><td>5</td><td>Author blank doc pages</td><td>✅ <strong>done</strong> — <code>docs/</code> has the 5 Setup pages, filled from the real pipeline</td></tr>
-  <tr><td>6</td><td>Platform + deployment hardening</td><td>⏭ <strong>next</strong> — secrets, network/auth tightening, prod-like target</td></tr>
+  <tr><td>6</td><td>Platform + deployment hardening</td><td>✅ <strong>done</strong> — SCRAM + private <code>pg_hba</code>, prod DB internal-only, Trivy blocking, GitLab CI translation</td></tr>
 </table>
 
 <h2>7 · Decisions to settle</h2>

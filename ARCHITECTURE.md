@@ -4,7 +4,7 @@
 > Source docs: `https://deathlabs.github.io/squidfall/` (mirror of `https://pages.cdso.army.mil/ai2c/squidfall/docs/`).
 > This is *our* working architecture — what the published docs describe **plus** the parts we filled in ourselves (the empty CI/CD/Platform/Deployment/Documentation pages) and every fix we made to get it actually running.
 
-> **Status — ✅ Phase 1 complete.** All 5 containers build, run, and a weather chat works **end-to-end** (verified: "weather in Pittsburgh, PA" → live geocode → live NWS forecast → streamed answer on both `http://localhost` and the dev server). The frontend carries a liquid-glass UI. **Phases 2–5 done** — public repo [`gasantiago16/squidfall`](https://github.com/gasantiago16/squidfall) + self-hosted runner `squidfall-win`; CI green on every push; CD on version tags deploys a separate prod-like stack (released **v0.1.0**); the blank upstream doc pages are authored in [`docs/`](docs/), and a one-command WSL bootstrap (`squidfall.sh`) is in place. **Next: Phase 6** — platform/security hardening.
+> **Status — ✅ Phase 1 complete.** All 5 containers build, run, and a weather chat works **end-to-end** (verified: "weather in Pittsburgh, PA" → live geocode → live NWS forecast → streamed answer on both `http://localhost` and the dev server). The frontend carries a liquid-glass UI. **Phases 2–6 done** — public repo [`gasantiago16/squidfall`](https://github.com/gasantiago16/squidfall) + self-hosted runner `squidfall-win`; CI green on every push; CD on version tags deploys a separate prod-like stack (released **v0.1.0**); the blank upstream doc pages are authored in [`docs/`](docs/), and a one-command WSL bootstrap (`squidfall.sh`); hardened (SCRAM + private `pg_hba`, prod DB internal-only, Trivy blocks fixable HIGH/CRITICAL) and the pipeline is translated to GitLab CI (`.gitlab-ci.yml`). **All six phases complete.**
 
 ---
 
@@ -43,7 +43,7 @@ All containers join the default Compose network and reach each other by **contai
 - **Data:** named volume `squidfall_database` → `/var/lib/postgresql/data`.
 - **Healthcheck:** `pg_isready -h 127.0.0.1` (TCP, so it only passes once the *real* server is up — not the socket-only init server). `backend` gates on `condition: service_healthy`.
 - **Env (`database/.env`):** `PGPASSWORD=postgres`, `PGDATABASE=squidfall`.
-- ⚠️ Auth is wide open (`0.0.0.0/0 md5`) — fine for local dev, **must be tightened** before any real deploy (Phase 6).
+- 🔒 **Hardened (Phase 6):** `initdb` uses **scram-sha-256** and `pg_hba` accepts only RFC1918 private ranges (Docker networks + host gateway), not `0.0.0.0/0`; the prod project drops the DB host port (internal-only). *(Applies to fresh volumes; existing volumes keep their original auth.)*
 
 ### 3.2 `backend`
 - **Stack:** Django project `squidfall` + app `chats`, API via **django-ninja**.
@@ -116,7 +116,7 @@ Runs on the self-hosted runner on every push / PR:
 - **Backend** Django `check` + `test` on **SQLite** (no live DB) via an ephemeral `docker run`.
 - **Tools / inference** image import checks (deps load).
 - **Lint** — ruff critical rules (`E9,F63,F7,F82`) via the official ruff image.
-- **Trivy** vuln scan (HIGH/CRITICAL) on saved image tars — report-only for now (ratchet to blocking in Phase 6).
+- **Trivy** vuln scan — **blocks on FIXABLE HIGH/CRITICAL** (`--ignore-unfixed --exit-code 1`; pre-flighted clean on both images).
 - Uses ephemeral `docker run` (not `compose up`) so CI never collides with a locally-running stack (fixed container names/ports). Full-stack integration testing lands in Phase 4 on the prod-like project.
 
 ### 6.2 Continuous Delivery (CD) — ✅ implemented (`.github/workflows/cd.yml`)
@@ -130,6 +130,7 @@ On a version tag (`v*`) or manual dispatch, on the self-hosted runner:
 - **Repo:** hosted on **GitHub.com** (code + workflow YAML).
 - **Compute:** a **self-hosted GitHub Actions runner** on our own machine — every build, scan, image push, and deploy runs on our hardware, never on GitHub-hosted runners. GitHub stores the code and fires triggers; the runner (and the Docker daemon, local registry, deploy target) stays private. Workflows live in `.github/workflows/` with `runs-on: [self-hosted]`.
 - **Live (Phase 2):** repo `https://github.com/gasantiago16/squidfall` (public); runner **`squidfall-win`** (labels `self-hosted, windows, x64`, `runner v2.335.1`) installed at `C:\actions-runner\squidfall`; `.github/workflows/hello.yml` verified green. Persistence: run interactively (`run.cmd`) or install as a Windows service (`svc.cmd install` from an admin shell).
+- **GitLab (for the Army instance):** the same pipeline is translated in **`.gitlab-ci.yml`** for a **shell-executor** GitLab Runner (build → test/lint → Trivy → deploy on `v*` tags, with rollback). The `.github/workflows/` files are harmless/ignored on GitLab. Inject the geocoding key via a masked CI/CD variable `GEOCODING_API_KEY`; set the runner `tag`.
 
 ---
 
@@ -143,7 +144,7 @@ On a version tag (`v*`) or manual dispatch, on the self-hosted runner:
 | **3** | CI pipeline | ✅ **done** — `.github/workflows/ci.yml` green (build · tests · ruff · Trivy report-only) |
 | **4** | CD pipeline | ✅ **done** — `cd.yml`: registry + SHA images + prod-like deploy + health gate + rollback (released v0.1.0) |
 | **5** | Author the blank doc pages | ✅ **done** — `docs/` has the 5 Setup pages, filled from the real pipeline |
-| **6** | Platform Resources + hardening | ⏭ next — secrets, tighten Postgres auth off `0.0.0.0/0`, prod-like target |
+| **6** | Platform Resources + hardening | ✅ **done** — SCRAM + private `pg_hba`, prod DB internal-only, Trivy blocking, GitLab CI translation, secrets via CI vars |
 
 ---
 
@@ -199,4 +200,4 @@ Geocoding key (for arbitrary places): copy `tools/.env.example` → `tools/.env`
 
 ---
 
-*Living document. Companion: `architecture.html` (same content, browsable, with the system diagram). Phase 1 done; Phase 2 (CI/CD on a self-hosted runner) next.*
+*Living document. Companion: `architecture.html` (same content, browsable, with the system diagram). **All six phases complete** — app + CI/CD (GitHub Actions; GitLab CI translation in `.gitlab-ci.yml`) + hardening. Deploy a fresh clone with `./squidfall.sh`.*

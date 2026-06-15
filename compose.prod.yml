@@ -16,8 +16,7 @@ services:
     networks:
       default:
         aliases: [squidfall-database]
-    ports:
-      - "15432:5432"
+    # No host port — the prod DB is reachable only on the compose network (Phase 6).
     volumes:
       - squidfall_prod_database:/var/lib/postgresql/data
     env_file:

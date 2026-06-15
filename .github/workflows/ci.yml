@@ -32,11 +32,10 @@ jobs:
       - name: Lint — ruff (critical rules)
         run: docker run --rm -v "${{ github.workspace }}:/src" -w /src ghcr.io/astral-sh/ruff:latest check --select E9,F63,F7,F82 backend tools inference
 
-      - name: Security scan — Trivy (HIGH/CRITICAL, report-only)
-        continue-on-error: true
+      - name: Security scan — Trivy (fail on FIXABLE HIGH/CRITICAL)
         run: |
           docker save squidfall/backend:latest -o backend.tar
           docker save squidfall/inference:latest -o inference.tar
-          docker run --rm -v "${{ github.workspace }}:/work" aquasec/trivy:latest image --input /work/backend.tar --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --no-progress
-          docker run --rm -v "${{ github.workspace }}:/work" aquasec/trivy:latest image --input /work/inference.tar --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --no-progress
+          docker run --rm -v "${{ github.workspace }}:/work" aquasec/trivy:latest image --input /work/backend.tar --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress
+          docker run --rm -v "${{ github.workspace }}:/work" aquasec/trivy:latest image --input /work/inference.tar --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress
           Remove-Item backend.tar, inference.tar

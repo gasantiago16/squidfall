@@ -10,12 +10,17 @@ APP_DB="${PGDATABASE:-squidfall}"
 if [ ! -f "$PGDATA/PG_VERSION" ]; then
   # Initialize with the REAL superuser password (reference used /dev/null = empty).
   printf '%s' "$DB_PASS" > /tmp/pwfile
-  initdb -D "$PGDATA" -U "$DB_USER" -A md5 --pwfile=/tmp/pwfile
+  initdb -D "$PGDATA" -U "$DB_USER" -A scram-sha-256 --pwfile=/tmp/pwfile
   rm -f /tmp/pwfile
 
-  # Listen everywhere and allow MD5 auth from any address (LOCAL DEV ONLY).
+  # Listen on all interfaces, but only ACCEPT connections from private (RFC1918)
+  # ranges with SCRAM auth — covers the Docker bridge networks and the host
+  # gateway, but not the public internet (Phase 6 hardening; was 0.0.0.0/0 md5).
   echo "listen_addresses = '*'" >> "$PGDATA/postgresql.conf"
-  echo "host all all 0.0.0.0/0 md5" >> "$PGDATA/pg_hba.conf"
+  echo "password_encryption = scram-sha-256" >> "$PGDATA/postgresql.conf"
+  echo "host all all 10.0.0.0/8 scram-sha-256"     >> "$PGDATA/pg_hba.conf"
+  echo "host all all 172.16.0.0/12 scram-sha-256"  >> "$PGDATA/pg_hba.conf"
+  echo "host all all 192.168.0.0/16 scram-sha-256" >> "$PGDATA/pg_hba.conf"
 
   # Start a temporary socket-only server to create the app database
   # (the reference never created it, so Django migrate had nowhere to connect).

@@ -1,0 +1,87 @@
+# GitLab CI/CD — translation of the GitHub Actions pipeline (.github/workflows/
+# ci.yml + cd.yml) for an Army GitLab instance.
+#
+# Target runner: a GitLab Runner with the **shell executor** on a Linux/WSL host
+# that has Docker + Compose v2 (and, for `deploy`, the local registry + Ollama).
+# A shell executor shares the host Docker daemon, so images built in `build`
+# are visible to later jobs (as with the GitHub self-hosted runner). Set the
+# runner tag below to match yours.
+#
+# Pipeline mirrors GitHub: build -> (backend-test | imports | lint) -> trivy
+#                          -> deploy (version tags only).
+
+stages: [build, test, scan, deploy]
+
+default:
+  tags: [squidfall]          # <-- set to YOUR GitLab Runner's tag (shell executor + Docker)
+
+variables:
+  COMPOSE_BAKE: "true"
+  REGISTRY: "localhost:5000"
+
+build:
+  stage: build
+  script:
+    - docker compose --profile all build
+
+backend-test:
+  stage: test
+  needs: [build]
+  script:
+    - docker run --rm squidfall/backend:latest sh -c "python manage.py check && python manage.py test --noinput 2>&1"
+
+imports:
+  stage: test
+  needs: [build]
+  script:
+    - docker run --rm squidfall/tools:latest python -c "import fastmcp"
+    - docker run --rm squidfall/inference:latest python -c "import langgraph, langchain_ollama, ag_ui_langgraph, langchain_mcp_adapters"
+
+lint:
+  stage: test
+  needs: [build]
+  script:
+    - docker run --rm -v "$CI_PROJECT_DIR:/src" -w /src ghcr.io/astral-sh/ruff:latest check --select E9,F63,F7,F82 backend tools inference
+
+trivy:
+  stage: scan
+  needs: [build]
+  script:
+    - docker save squidfall/backend:latest -o backend.tar
+    - docker save squidfall/inference:latest -o inference.tar
+    - docker run --rm -v "$CI_PROJECT_DIR:/work" aquasec/trivy:latest image --input /work/backend.tar --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress
+    - docker run --rm -v "$CI_PROJECT_DIR:/work" aquasec/trivy:latest image --input /work/inference.tar --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress
+  after_script:
+    - rm -f backend.tar inference.tar
+
+deploy:
+  stage: deploy
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v/'      # only on a version tag (a release)
+  variables:
+    TAG: "$CI_COMMIT_SHA"
+  script:
+    # Inject the geocoding key from a masked CI/CD variable, if set (Settings >
+    # CI/CD > Variables: GEOCODING_API_KEY, masked + protected).
+    - if [ -n "$GEOCODING_API_KEY" ]; then echo "GEOCODING_API_KEY=$GEOCODING_API_KEY" > tools/.env; fi
+    - docker compose --profile all build
+    - |
+      for s in database backend tools inference frontend; do
+        docker tag "squidfall/$s:latest" "$REGISTRY/squidfall/$s:$TAG"
+        docker push "$REGISTRY/squidfall/$s:$TAG"
+      done
+    - docker compose -p squidfall-prod -f compose.prod.yml up -d --pull always
+    - |
+      for url in http://localhost:18001/api/v1/health http://localhost:8080/ http://localhost:18000/api/v1/chats/; do
+        code=$(curl -s -o /dev/null -w "%{http_code}" --retry 30 --retry-delay 2 --retry-all-errors "$url")
+        echo "$url -> $code"
+        [ "$code" = "200" ] || exit 1
+      done
+    - |
+      for s in database backend tools inference frontend; do
+        docker tag "$REGISTRY/squidfall/$s:$TAG" "$REGISTRY/squidfall/$s:stable"
+        docker push "$REGISTRY/squidfall/$s:stable"
+      done
+  after_script:
+    # Roll back to the last good :stable if the deploy/health-gate failed.
+    - if [ "$CI_JOB_STATUS" = "failed" ]; then echo "rolling back to :stable"; TAG=stable docker compose -p squidfall-prod -f compose.prod.yml up -d --pull always || true; fi

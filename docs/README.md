@@ -15,3 +15,7 @@ For the system design, see [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 | Documentation | [setup](documentation/setup.md) — how these docs are maintained |
 
 **Fastest path (Linux / WSL):** clone the repo, then run `./squidfall.sh`.
+
+**On GitLab (e.g. an Army instance):** the GitHub Actions pipeline is translated in
+[`../.gitlab-ci.yml`](../.gitlab-ci.yml) for a shell-executor GitLab Runner — same
+stages (build · test · lint · Trivy · deploy-on-tag + rollback). See the CI and CD setup pages.

@@ -6,11 +6,12 @@ self-hosted runner) built out over later phases.
 
 **Repo:** <https://github.com/gasantiago16/squidfall> (public)
 
-> **Status: ✅ Phases 1–4 complete.** All 5 containers build and run; a weather chat works
+> **Status: ✅ All six phases complete.** All 5 containers build and run; a weather chat works
 > end-to-end (verified: *"weather in Pittsburgh, PA"* → live geocode → live NWS forecast →
 > streamed answer). The frontend has a liquid-glass UI. Public repo + self-hosted runner are live;
-> CI green on every push, and CD (on version tags) deploys a prod-like stack — released **v0.1.0**.
-> **Next: Phase 5 (author the upstream blank doc pages).**
+> CI green on every push, CD (on version tags) deploys a hardened prod-like stack (**v0.1.0**), the
+> blank upstream docs are authored in `docs/`, and the pipeline is translated to GitLab CI
+> (`.gitlab-ci.yml`). Deploy a fresh clone with `./squidfall.sh`.
 
 See **`ARCHITECTURE.md`** / **`architecture.html`** for the full breakdown, data flow, and bug log; section setup guides live in **[`docs/`](docs/)**.
 
@@ -57,6 +58,7 @@ If you install make (`winget install GnuWin32.Make`), the `Makefile` mirrors the
 - **CI** (`.github/workflows/ci.yml`) — every push/PR: build all images, Django tests on SQLite, ruff (critical), Trivy (report-only). Ephemeral `docker run` checks (no `compose up`) so it never collides with a running stack.
 - **CD** (`.github/workflows/cd.yml`) — on a `v*` tag: build → SHA-tag → push to a local registry (`registry:2` @ `:5000`) → deploy the **prod-like** `squidfall-prod` project (`compose.prod.yml`, ports `:8080 / :18000 / :18001 / …`) → health gate → promote `:stable` → rollback on failure.
 - **Cut a release:** `git tag vX.Y.Z && git push origin vX.Y.Z`. Prod UI → <http://localhost:8080> (runs alongside dev on `:80`).
+- **GitLab:** the same pipeline is translated in **`.gitlab-ci.yml`** for a shell-executor GitLab Runner (build · test · lint · Trivy · deploy-on-tag + rollback). Set the runner `tag` and (optionally) a masked `GEOCODING_API_KEY` variable.
 
 ## Status
 
@@ -67,9 +69,10 @@ If you install make (`winget install GnuWin32.Make`), the `Makefile` mirrors the
 - ✅ backend — Django, migrates, API returns 200
 - ✅ frontend — Next.js + CopilotKit + liquid-glass UI, on `:80`
 - ✅ Phase 2 — public GitHub repo + self-hosted runner (`squidfall-win`)
-- ✅ Phase 3 — CI pipeline green (`ci.yml`: build · Django tests · ruff · Trivy report-only)
-- ✅ Phase 4 — CD pipeline (`cd.yml`): local registry + prod-like deploy (`compose.prod.yml`) + health gate + rollback; released v0.1.0
-- ⬜ Phase 5 (author upstream docs) · Phase 6 (hardening)
+- ✅ Phase 3 — CI pipeline (`ci.yml`: build · Django tests · ruff · Trivy blocks fixable HIGH/CRITICAL)
+- ✅ Phase 4 — CD pipeline (`cd.yml`): local registry + prod-like deploy + health gate + rollback; released v0.1.0
+- ✅ Phase 5 — `docs/` Setup pages authored from the real pipeline
+- ✅ Phase 6 — hardening (SCRAM + private `pg_hba`, prod DB internal-only, Trivy blocking) + GitLab CI translation (`.gitlab-ci.yml`)
 
 ## Deliberate deviations from the reference docs (so it actually builds/runs)
 

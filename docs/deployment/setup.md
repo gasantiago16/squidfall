@@ -44,5 +44,6 @@ TAG=<sha-or-stable> docker compose -p squidfall-prod -f compose.prod.yml up -d -
 - `host.docker.internal` lets containers reach Ollama on the host (on WSL, the Windows host).
 - `tools/.env` (gitignored) holds the geocoding key; it is **optional** for startup
   (`env_file ... required: false`), so a fresh clone deploys without it.
-- Postgres auth is wide-open (`0.0.0.0/0 md5`) for local dev — **tighten before any
-  real network exposure** (Platform hardening, Phase 6).
+- Postgres is **hardened** (Phase 6): SCRAM auth + `pg_hba` limited to RFC1918 private
+  ranges (not `0.0.0.0/0`), and the prod project exposes no DB host port. (Applies to
+  fresh volumes; recreate the volume to re-init an older one.)
