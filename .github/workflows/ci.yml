@@ -1,0 +1,42 @@
+name: ci
+
+# Runs on the self-hosted runner. Builds all 5 images (shares Docker's cache),
+# then validates each with ephemeral `docker run` checks — no `compose up`, so
+# it never collides with a locally-running stack (fixed container names/ports).
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  ci:
+    runs-on: [self-hosted, windows, x64]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build all images (Compose Bake)
+        env:
+          COMPOSE_BAKE: "true"
+        run: docker compose --profile all build
+
+      - name: Backend — Django check + tests (SQLite, no DB)
+        run: docker run --rm squidfall/backend:latest sh -c "python manage.py check && python manage.py test --noinput 2>&1"
+
+      - name: Tools — image import check
+        run: docker run --rm squidfall/tools:latest python -c "import fastmcp; print('tools image OK')"
+
+      - name: Inference — dependency import check
+        run: docker run --rm squidfall/inference:latest python -c "import langgraph, langchain_ollama, ag_ui_langgraph, langchain_mcp_adapters; print('inference deps OK')"
+
+      - name: Lint — ruff (critical rules)
+        run: docker run --rm -v "${{ github.workspace }}:/src" -w /src ghcr.io/astral-sh/ruff:latest check --select E9,F63,F7,F82 backend tools inference
+
+      - name: Security scan — Trivy (HIGH/CRITICAL, report-only)
+        continue-on-error: true
+        run: |
+          docker save squidfall/backend:latest -o backend.tar
+          docker save squidfall/inference:latest -o inference.tar
+          docker run --rm -v "${{ github.workspace }}:/work" aquasec/trivy:latest image --input /work/backend.tar --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --no-progress
+          docker run --rm -v "${{ github.workspace }}:/work" aquasec/trivy:latest image --input /work/inference.tar --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --no-progress
+          Remove-Item backend.tar, inference.tar

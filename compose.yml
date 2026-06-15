@@ -40,8 +40,11 @@ services:
     container_name: squidfall-tools
     ports:
       - "8002:8002"
+    # gitignored (holds the geocoding key) — optional so a fresh clone / CI
+    # build doesn't fail; tools/main.py defaults the key to "" when unset.
     env_file:
-      - tools/.env
+      - path: tools/.env
+        required: false
 
   inference:
     profiles: [ all, inference ]

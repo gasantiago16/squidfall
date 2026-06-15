@@ -3,9 +3,7 @@ name: hello-self-hosted
 # Phase 2 smoke test: proves the self-hosted runner picks up jobs and can
 # reach the local Docker daemon (which the CI pipeline in Phase 3 will need).
 on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+  workflow_dispatch:   # manual only — ci.yml is the per-push workflow
 
 jobs:
   hello:
