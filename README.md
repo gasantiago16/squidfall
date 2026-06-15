@@ -12,7 +12,7 @@ self-hosted runner) built out over later phases.
 > CI green on every push, and CD (on version tags) deploys a prod-like stack — released **v0.1.0**.
 > **Next: Phase 5 (author the upstream blank doc pages).**
 
-See **`ARCHITECTURE.md`** / **`architecture.html`** for the full breakdown, data flow, and bug log.
+See **`ARCHITECTURE.md`** / **`architecture.html`** for the full breakdown, data flow, and bug log; section setup guides live in **[`docs/`](docs/)**.
 
 ## Stack
 
@@ -32,6 +32,14 @@ See **`ARCHITECTURE.md`** / **`architecture.html`** for the full breakdown, data
 - `make` is **not** installed → use `./sf.ps1`
 
 ## Run it
+
+**Linux / WSL — one command** (preflight → pull model → build → start → health → URL):
+
+```bash
+./squidfall.sh          # then open http://localhost  ·  also: down | status | logs | build
+```
+
+**Windows (no `make`):**
 
 ```powershell
 ./sf.ps1 start all      # build (if needed) + bring up all 5 containers

@@ -48,7 +48,7 @@
   <h1>Squidfall — Architecture Breakdown</h1>
   <div class="sub">Local rebuild of the Army AI2C / CDSO <strong>Squidfall</strong> reference app, with a <strong>fully-local CI/CD pipeline</strong> on self-hosted git runners.</div>
   <div class="sub">Source: <a href="https://deathlabs.github.io/squidfall/">deathlabs.github.io/squidfall</a> (mirror of <code>pages.cdso.army.mil/ai2c/squidfall/docs</code>)</div>
-  <div class="note" style="border-left-color:var(--ok);margin-top:14px">✅ <strong>Phases 1–4 complete</strong> — 5 containers build &amp; run, weather chat verified end-to-end, liquid-glass frontend; public repo <a href="https://github.com/gasantiago16/squidfall">gasantiago16/squidfall</a> + self-hosted runner <code>squidfall-win</code>; CI green per push, CD on version tags deploys a prod-like stack (released <strong>v0.1.0</strong>). <strong>Next: Phase 5</strong> — author the upstream blank doc pages.</div>
+  <div class="note" style="border-left-color:var(--ok);margin-top:14px">✅ <strong>Phases 1–5 complete</strong> — 5 containers build &amp; run, weather chat verified end-to-end, liquid-glass frontend; public repo <a href="https://github.com/gasantiago16/squidfall">gasantiago16/squidfall</a> + self-hosted runner <code>squidfall-win</code>; CI green per push, CD on version tags deploys a prod-like stack (released <strong>v0.1.0</strong>); blank upstream doc pages authored in <code>docs/</code>, one-command WSL bootstrap <code>squidfall.sh</code> in place. <strong>Next: Phase 6</strong> — platform/security hardening.</div>
 </header>
 
 <h2>1 · What Squidfall is</h2>
@@ -176,7 +176,7 @@
 </div>
 
 <h2>4 · Orchestration</h2>
-<p><strong>Makefile</strong> / <strong><code>sf.ps1</code></strong> (the PowerShell wrapper, since <code>make</code> isn't installed here) are the control surface — <code>build</code> / <code>start</code> / <code>stop</code> / <code>status</code> with <code>DOCKER_COMPOSE_PROFILE</code> selecting scope and <code>COMPOSE_BAKE=true</code> for parallel builds. <strong><code>compose.yml</code></strong> defines the 5 services + volume; <code>profiles:</code> gate which come up; <code>database</code> has a healthcheck and <code>backend</code> waits on it.</p>
+<p><strong>Makefile</strong> / <strong><code>sf.ps1</code></strong> (PowerShell, since <code>make</code> isn't installed here) / <strong><code>squidfall.sh</code></strong> (one-shot bash bootstrap for Linux·WSL) are the control surface — <code>build</code> / <code>start</code> / <code>stop</code> / <code>status</code> with <code>DOCKER_COMPOSE_PROFILE</code> selecting scope and <code>COMPOSE_BAKE=true</code> for parallel builds. <strong><code>compose.yml</code></strong> defines the 5 services + volume; <code>profiles:</code> gate which come up; <code>database</code> has a healthcheck and <code>backend</code> waits on it.</p>
 <pre>./sf.ps1 build database     # build just the db image
 ./sf.ps1 start database     # bring it up
 ./sf.ps1 start all          # bring up the whole stack</pre>
@@ -200,8 +200,8 @@
   <tr><td>2</td><td>GitHub repo + self-hosted runner</td><td>✅ <strong>done</strong> — public repo, runner <code>squidfall-win</code> online, hello-world green</td></tr>
   <tr><td>3</td><td>CI pipeline</td><td>✅ <strong>done</strong> — <code>ci.yml</code> green (build · tests · ruff · Trivy report-only)</td></tr>
   <tr><td>4</td><td>CD pipeline</td><td>✅ <strong>done</strong> — <code>cd.yml</code>: registry + SHA images + prod-like deploy + health gate + rollback (v0.1.0)</td></tr>
-  <tr><td>5</td><td>Author blank doc pages</td><td>⏭ <strong>next</strong> — real CI / CD / Platform / Deployment / Documentation content</td></tr>
-  <tr><td>6</td><td>Platform + deployment hardening</td><td>secrets, network/auth tightening, prod-like target</td></tr>
+  <tr><td>5</td><td>Author blank doc pages</td><td>✅ <strong>done</strong> — <code>docs/</code> has the 5 Setup pages, filled from the real pipeline</td></tr>
+  <tr><td>6</td><td>Platform + deployment hardening</td><td>⏭ <strong>next</strong> — secrets, network/auth tightening, prod-like target</td></tr>
 </table>
 
 <h2>7 · Decisions to settle</h2>

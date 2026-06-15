@@ -4,7 +4,7 @@
 > Source docs: `https://deathlabs.github.io/squidfall/` (mirror of `https://pages.cdso.army.mil/ai2c/squidfall/docs/`).
 > This is *our* working architecture — what the published docs describe **plus** the parts we filled in ourselves (the empty CI/CD/Platform/Deployment/Documentation pages) and every fix we made to get it actually running.
 
-> **Status — ✅ Phase 1 complete.** All 5 containers build, run, and a weather chat works **end-to-end** (verified: "weather in Pittsburgh, PA" → live geocode → live NWS forecast → streamed answer on both `http://localhost` and the dev server). The frontend carries a liquid-glass UI. **Phases 2–4 done** — public repo [`gasantiago16/squidfall`](https://github.com/gasantiago16/squidfall) + self-hosted runner `squidfall-win`; CI green on every push; CD on version tags deploys a separate prod-like stack (released **v0.1.0**). **Next: Phase 5** — author the upstream blank doc pages.
+> **Status — ✅ Phase 1 complete.** All 5 containers build, run, and a weather chat works **end-to-end** (verified: "weather in Pittsburgh, PA" → live geocode → live NWS forecast → streamed answer on both `http://localhost` and the dev server). The frontend carries a liquid-glass UI. **Phases 2–5 done** — public repo [`gasantiago16/squidfall`](https://github.com/gasantiago16/squidfall) + self-hosted runner `squidfall-win`; CI green on every push; CD on version tags deploys a separate prod-like stack (released **v0.1.0**); the blank upstream doc pages are authored in [`docs/`](docs/), and a one-command WSL bootstrap (`squidfall.sh`) is in place. **Next: Phase 6** — platform/security hardening.
 
 ---
 
@@ -101,6 +101,7 @@ All containers join the default Compose network and reach each other by **contai
 
 - **`Makefile`** — `make` (build) / `start` / `stop` / `status`, with `DOCKER_COMPOSE_PROFILE` selecting scope and `export COMPOSE_BAKE=true` for parallel builds.
 - **`sf.ps1`** — a PowerShell wrapper with the same verbs, because **`make` is not installed** on this Windows box: `./sf.ps1 start all`, `./sf.ps1 build inference`, etc.
+- **`squidfall.sh`** — one-shot bash bootstrap for **Linux/WSL**: `./squidfall.sh` preflights Docker, ensures the Ollama model, builds, starts, health-checks, and prints the URL (also `down`/`status`/`logs`/`build`). Makes a fresh-clone deploy "run one file."
 - **`compose.yml`** — 5 services + named volume `squidfall_database`; `profiles:` gate which come up; `database` has a healthcheck and `backend` waits on it.
 
 ---
@@ -141,8 +142,8 @@ On a version tag (`v*`) or manual dispatch, on the self-hosted runner:
 | **2** | GitHub repo + self-hosted Actions runner | ✅ **done** — public repo `gasantiago16/squidfall`, runner `squidfall-win` online, hello-world green |
 | **3** | CI pipeline | ✅ **done** — `.github/workflows/ci.yml` green (build · tests · ruff · Trivy report-only) |
 | **4** | CD pipeline | ✅ **done** — `cd.yml`: registry + SHA images + prod-like deploy + health gate + rollback (released v0.1.0) |
-| **5** | Author the blank doc pages | ⏭ **next** — real content for CI / CD / Platform / Deployment / Documentation |
-| **6** | Platform Resources + hardening | secrets, tighten Postgres auth off `0.0.0.0/0`, prod-like target |
+| **5** | Author the blank doc pages | ✅ **done** — `docs/` has the 5 Setup pages, filled from the real pipeline |
+| **6** | Platform Resources + hardening | ⏭ next — secrets, tighten Postgres auth off `0.0.0.0/0`, prod-like target |
 
 ---
 
