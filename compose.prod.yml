@@ -1,0 +1,87 @@
+# Prod-like deployment (Phase 4, option a). Runs ALONGSIDE the dev stack:
+#   docker compose -p squidfall-prod -f compose.prod.yml pull
+#   docker compose -p squidfall-prod -f compose.prod.yml up -d
+#
+# Images come from the local registry (localhost:5000); TAG selects the version
+# (CD sets it to the commit SHA). Distinct container names + shifted host ports
+# avoid collisions with the dev stack. Network aliases match the dev service
+# names so the committed .env files (PGHOST=squidfall-database, etc.) resolve
+# unchanged inside this project's isolated network.
+
+services:
+
+  database:
+    image: localhost:5000/squidfall/database:${TAG:-latest}
+    container_name: squidfall-prod-database
+    networks:
+      default:
+        aliases: [squidfall-database]
+    ports:
+      - "15432:5432"
+    volumes:
+      - squidfall_prod_database:/var/lib/postgresql/data
+    env_file:
+      - database/.env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U postgres -d squidfall"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+
+  backend:
+    image: localhost:5000/squidfall/backend:${TAG:-latest}
+    container_name: squidfall-prod-backend
+    networks:
+      default:
+        aliases: [squidfall-backend]
+    depends_on:
+      database:
+        condition: service_healthy
+    ports:
+      - "18000:8000"
+    env_file:
+      - backend/.env
+
+  tools:
+    image: localhost:5000/squidfall/tools:${TAG:-latest}
+    container_name: squidfall-prod-tools
+    networks:
+      default:
+        aliases: [squidfall-tools]
+    ports:
+      - "18002:8002"
+    env_file:
+      - path: tools/.env
+        required: false
+
+  inference:
+    image: localhost:5000/squidfall/inference:${TAG:-latest}
+    container_name: squidfall-prod-inference
+    networks:
+      default:
+        aliases: [squidfall-inference]
+    depends_on:
+      - tools
+    ports:
+      - "18001:8001"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - inference/.env
+
+  frontend:
+    image: localhost:5000/squidfall/frontend:${TAG:-latest}
+    container_name: squidfall-prod-frontend
+    networks:
+      default:
+        aliases: [squidfall-frontend]
+    depends_on:
+      - inference
+    ports:
+      - "8080:3000"
+    env_file:
+      - frontend/.env
+
+volumes:
+  squidfall_prod_database:

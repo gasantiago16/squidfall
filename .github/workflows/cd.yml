@@ -1,0 +1,67 @@
+name: cd
+
+# Build -> tag by commit SHA -> push to the local registry -> deploy the
+# prod-like project (compose.prod.yml, runs alongside dev) -> health-gate ->
+# promote :stable. Rolls back to :stable on failure. Triggers on version tags
+# (a release) or manual dispatch — NOT on every commit.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  cd:
+    runs-on: [self-hosted, windows, x64]
+    env:
+      REGISTRY: localhost:5000
+      TAG: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build images
+        env:
+          COMPOSE_BAKE: "true"
+        run: docker compose --profile all build
+
+      - name: Tag + push images to local registry (by SHA)
+        run: |
+          $services = "database","backend","tools","inference","frontend"
+          foreach ($s in $services) {
+            docker tag "squidfall/${s}:latest" "${env:REGISTRY}/squidfall/${s}:${env:TAG}"
+            docker push "${env:REGISTRY}/squidfall/${s}:${env:TAG}"
+            if ($LASTEXITCODE -ne 0) { throw "push failed for ${s}" }
+          }
+
+      - name: Deploy to prod-like project
+        run: docker compose -p squidfall-prod -f compose.prod.yml up -d --pull always
+
+      - name: Health gate
+        run: |
+          $endpoints = @(
+            @{ name = "inference"; url = "http://localhost:18001/api/v1/health" },
+            @{ name = "frontend";  url = "http://localhost:8080/" },
+            @{ name = "backend";   url = "http://localhost:18000/api/v1/chats/" }
+          )
+          foreach ($e in $endpoints) {
+            $code = curl.exe -s -o NUL -w "%{http_code}" --retry 30 --retry-delay 2 --retry-all-errors $e.url
+            Write-Host "$($e.name) -> $code"
+            if ($code -ne "200") { throw "health gate FAILED for $($e.name): $code" }
+          }
+          Write-Host "health gate passed"
+
+      - name: Promote images to :stable
+        run: |
+          $services = "database","backend","tools","inference","frontend"
+          foreach ($s in $services) {
+            docker tag "${env:REGISTRY}/squidfall/${s}:${env:TAG}" "${env:REGISTRY}/squidfall/${s}:stable"
+            docker push "${env:REGISTRY}/squidfall/${s}:stable"
+          }
+
+      - name: Rollback to :stable on failure
+        if: failure()
+        continue-on-error: true
+        env:
+          TAG: stable
+        run: |
+          Write-Host "Deploy/health failed — rolling back to :stable (if it exists)"
+          docker compose -p squidfall-prod -f compose.prod.yml up -d --pull always
