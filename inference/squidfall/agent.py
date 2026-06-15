@@ -1,8 +1,8 @@
 """Builds the Squidfall LangGraph agent.
 
-Default LLM is a LOCAL Ollama model (Qwen) reached over Ollama's NATIVE API
-(not the OpenAI-compatible /v1 path, which has an open bug where tool calls +
-streaming break). Set USE_AZURE=true to use Azure OpenAI instead.
+The LLM is provider-agnostic: the agent calls build_llm() (see llm.py), which
+selects Ollama / OpenAI-compatible / Azure OpenAI from LLM_PROVIDER. MCP tools
+are loaded from TOOLS_ENDPOINT and wired into a ReAct agent.
 """
 
 import asyncio
@@ -15,6 +15,8 @@ try:
     from langgraph.checkpoint.memory import InMemorySaver
 except ImportError:  # older langgraph
     from langgraph.checkpoint.memory import MemorySaver as InMemorySaver
+
+from .llm import build_llm
 
 TOOLS_ENDPOINT = getenv("TOOLS_ENDPOINT", "http://squidfall-tools:8002/mcp")
 
@@ -35,27 +37,6 @@ SYSTEM_PROMPT = (
 )
 
 
-def _build_llm():
-    if getenv("USE_AZURE", "false").lower() == "true":
-        from langchain_openai import AzureChatOpenAI
-
-        return AzureChatOpenAI(
-            azure_endpoint=getenv("AZURE_OPENAI_ENDPOINT", ""),
-            api_version=getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
-            azure_deployment=getenv("AZURE_OPENAI_DEPLOYMENT", "squidfall"),
-            temperature=0,
-        )
-
-    from langchain_ollama import ChatOllama
-
-    return ChatOllama(
-        model=getenv("OLLAMA_MODEL", "qwen2.5"),
-        base_url=getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434"),
-        temperature=0,
-        num_ctx=int(getenv("OLLAMA_NUM_CTX", "8192")),
-    )
-
-
 async def _load_tools(retries: int = 15, delay: float = 2.0):
     """Load MCP tools, retrying while the tools container finishes starting."""
     last_error = None
@@ -71,7 +52,7 @@ async def _load_tools(retries: int = 15, delay: float = 2.0):
 
 async def build_graph():
     """Build and return a compiled LangGraph ReAct agent."""
-    llm = _build_llm()
+    llm = build_llm()
     tools = await _load_tools()
     # The AG-UI adapter calls graph.aget_state() each run, which needs a
     # checkpointer; without one it raises "No checkpointer set".

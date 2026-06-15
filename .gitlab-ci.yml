@@ -36,6 +36,10 @@ imports:
   script:
     - docker run --rm squidfall/tools:latest python -c "import fastmcp"
     - docker run --rm squidfall/inference:latest python -c "import langgraph, langchain_ollama, ag_ui_langgraph, langchain_mcp_adapters"
+    # LLM provider factory — offline construction for all 3 providers
+    - docker run --rm -e LLM_PROVIDER=ollama squidfall/inference:latest python -c "from squidfall.llm import build_llm; print(type(build_llm()).__name__)"
+    - docker run --rm -e LLM_PROVIDER=openai -e OPENAI_BASE_URL=http://x/v1 -e OPENAI_API_KEY=x -e LLM_MODEL=m squidfall/inference:latest python -c "from squidfall.llm import build_llm; print(type(build_llm()).__name__)"
+    - docker run --rm -e LLM_PROVIDER=azure_openai -e AZURE_OPENAI_ENDPOINT=https://x.openai.azure.com/ -e AZURE_OPENAI_DEPLOYMENT=d -e AZURE_OPENAI_API_KEY=x squidfall/inference:latest python -c "from squidfall.llm import build_llm; print(type(build_llm()).__name__)"
 
 lint:
   stage: test

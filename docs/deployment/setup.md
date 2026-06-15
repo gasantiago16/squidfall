@@ -40,6 +40,15 @@ rest), or manually:
 TAG=<sha-or-stable> docker compose -p squidfall-prod -f compose.prod.yml up -d --pull always
 ```
 
+## C. Switching the LLM provider
+The inference agent's model is chosen by **`LLM_PROVIDER`** in `inference/.env` (factory in `inference/squidfall/llm.py`) — no code change to switch:
+
+- `ollama` (default) — local Ollama; set `OLLAMA_BASE_URL`, `LLM_MODEL` (e.g. `qwen2.5`).
+- `openai` — any OpenAI-compatible endpoint; set `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `LLM_MODEL`.
+- `azure_openai` — Azure OpenAI; set `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION`, and **either** `AZURE_OPENAI_API_KEY` **or** Entra-ID vars (`AZURE_TENANT_ID/CLIENT_ID/CLIENT_SECRET`, plus `AZURE_AUTHORITY_HOST` + `AZURE_TOKEN_SCOPE` for the Gov cloud).
+
+**No Ollama on the target box?** Set `LLM_PROVIDER=azure_openai` (or `openai`) and inject the secret at deploy. The chosen model/endpoint must support tool calling.
+
 ## Notes
 - `host.docker.internal` lets containers reach Ollama on the host (on WSL, the Windows host).
 - `tools/.env` (gitignored) holds the geocoding key; it is **optional** for startup
