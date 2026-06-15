@@ -4,7 +4,7 @@
 > Source docs: `https://deathlabs.github.io/squidfall/` (mirror of `https://pages.cdso.army.mil/ai2c/squidfall/docs/`).
 > This is *our* working architecture — what the published docs describe **plus** the parts we filled in ourselves (the empty CI/CD/Platform/Deployment/Documentation pages) and every fix we made to get it actually running.
 
-> **Status — ✅ Phase 1 complete.** All 5 containers build, run, and a weather chat works **end-to-end** (verified: "weather in Pittsburgh, PA" → live geocode → live NWS forecast → streamed answer on both `http://localhost` and the dev server). The frontend carries a liquid-glass UI. **Phase 2 done** — public repo [`gasantiago16/squidfall`](https://github.com/gasantiago16/squidfall) + self-hosted runner `squidfall-win` (hello-world workflow green). **Next: Phase 3** — the CI pipeline.
+> **Status — ✅ Phase 1 complete.** All 5 containers build, run, and a weather chat works **end-to-end** (verified: "weather in Pittsburgh, PA" → live geocode → live NWS forecast → streamed answer on both `http://localhost` and the dev server). The frontend carries a liquid-glass UI. **Phases 2–3 done** — public repo [`gasantiago16/squidfall`](https://github.com/gasantiago16/squidfall) + self-hosted runner `squidfall-win`; CI green on every push (build · Django tests · ruff · Trivy). **Next: Phase 4** — the CD pipeline (local registry + deploy to a separate prod-like project).
 
 ---
 
@@ -109,12 +109,14 @@ All containers join the default Compose network and reach each other by **contai
 
 The published **Continuous Integration, Continuous Delivery, Platform Resources, Deployment, and Documentation** pages are all empty stubs (`Step 1. Text goes here.`). We design and build these locally.
 
-### 6.1 Continuous Integration (CI) — on every push / PR
-- Build the 5 images (parallel via Compose Bake).
-- **Backend tests** with **no `DB_ENGINE`** → SQLite, so CI needs no live Postgres.
-- Lint / format (ruff for Python, eslint for frontend).
-- **Container vulnerability scan** (Trivy) on each image.
-- Smoke tests: backend `POST /api/v1/chats/`, inference `/api/v1/health`, tools MCP handshake.
+### 6.1 Continuous Integration (CI) — ✅ implemented (`.github/workflows/ci.yml`)
+Runs on the self-hosted runner on every push / PR:
+- Build all 5 images (Compose Bake; shares the local Docker cache → fast).
+- **Backend** Django `check` + `test` on **SQLite** (no live DB) via an ephemeral `docker run`.
+- **Tools / inference** image import checks (deps load).
+- **Lint** — ruff critical rules (`E9,F63,F7,F82`) via the official ruff image.
+- **Trivy** vuln scan (HIGH/CRITICAL) on saved image tars — report-only for now (ratchet to blocking in Phase 6).
+- Uses ephemeral `docker run` (not `compose up`) so CI never collides with a locally-running stack (fixed container names/ports). Full-stack integration testing lands in Phase 4 on the prod-like project.
 
 ### 6.2 Continuous Delivery (CD) — on merge to `main` / tag
 - Re-tag images with version/commit SHA → push to a **local container registry** → deploy via Compose → post-deploy health gate → roll back on failure.
@@ -133,8 +135,8 @@ The published **Continuous Integration, Continuous Delivery, Platform Resources,
 | **0** | Scaffolding + architecture docs | ✅ done |
 | **1** | Build & run the app locally | ✅ **done — 5 containers built + running, weather chat verified E2E, glass UI** |
 | **2** | GitHub repo + self-hosted Actions runner | ✅ **done** — public repo `gasantiago16/squidfall`, runner `squidfall-win` online, hello-world green |
-| **3** | CI pipeline | ⏭ **next** — build + test + lint + Trivy scan on push/PR (self-hosted) |
-| **4** | CD pipeline | local registry + versioned images + auto deploy + health gate |
+| **3** | CI pipeline | ✅ **done** — `.github/workflows/ci.yml` green (build · tests · ruff · Trivy report-only) |
+| **4** | CD pipeline | ⏭ **next** — local registry + SHA-tagged images + deploy to a separate prod-like project + health gate |
 | **5** | Author the blank doc pages | real content for CI / CD / Platform / Deployment / Documentation |
 | **6** | Platform Resources + hardening | secrets, tighten Postgres auth off `0.0.0.0/0`, prod-like target |
 

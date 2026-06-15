@@ -6,10 +6,10 @@ self-hosted runner) built out over later phases.
 
 **Repo:** <https://github.com/gasantiago16/squidfall> (public)
 
-> **Status: ✅ Phases 1 & 2 complete.** All 5 containers build and run; a weather chat works
+> **Status: ✅ Phases 1–3 complete.** All 5 containers build and run; a weather chat works
 > end-to-end (verified: *"weather in Pittsburgh, PA"* → live geocode → live NWS forecast →
 > streamed answer). The frontend has a liquid-glass UI. Public repo + self-hosted runner are
-> live with a green workflow. **Next: Phase 3 (CI pipeline).**
+> live, and CI is green on every push (build · tests · ruff · Trivy). **Next: Phase 4 (CD pipeline).**
 
 See **`ARCHITECTURE.md`** / **`architecture.html`** for the full breakdown, data flow, and bug log.
 
@@ -51,8 +51,9 @@ If you install make (`winget install GnuWin32.Make`), the `Makefile` mirrors the
 - ✅ inference — real LangGraph + AG-UI agent (Ollama/Qwen + MCP tools + checkpointer)
 - ✅ backend — Django, migrates, API returns 200
 - ✅ frontend — Next.js + CopilotKit + liquid-glass UI, on `:80`
-- ✅ Phase 2 — public GitHub repo + self-hosted runner (`squidfall-win`), hello-world workflow green
-- ⬜ Phase 3 (CI: build/test/lint/scan) · Phase 4 (CD) · Phase 5 (docs) · Phase 6 (hardening)
+- ✅ Phase 2 — public GitHub repo + self-hosted runner (`squidfall-win`)
+- ✅ Phase 3 — CI pipeline green (`ci.yml`: build · Django tests · ruff · Trivy report-only)
+- ⬜ Phase 4 (CD) · Phase 5 (docs) · Phase 6 (hardening)
 
 ## Deliberate deviations from the reference docs (so it actually builds/runs)
 

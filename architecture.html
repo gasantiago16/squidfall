@@ -48,7 +48,7 @@
   <h1>Squidfall — Architecture Breakdown</h1>
   <div class="sub">Local rebuild of the Army AI2C / CDSO <strong>Squidfall</strong> reference app, with a <strong>fully-local CI/CD pipeline</strong> on self-hosted git runners.</div>
   <div class="sub">Source: <a href="https://deathlabs.github.io/squidfall/">deathlabs.github.io/squidfall</a> (mirror of <code>pages.cdso.army.mil/ai2c/squidfall/docs</code>)</div>
-  <div class="note" style="border-left-color:var(--ok);margin-top:14px">✅ <strong>Phases 1 &amp; 2 complete</strong> — 5 containers build &amp; run, weather chat verified end-to-end, liquid-glass frontend; public repo <a href="https://github.com/gasantiago16/squidfall">gasantiago16/squidfall</a> + self-hosted runner <code>squidfall-win</code> with a green workflow. <strong>Next: Phase 3</strong> — the CI pipeline.</div>
+  <div class="note" style="border-left-color:var(--ok);margin-top:14px">✅ <strong>Phases 1–3 complete</strong> — 5 containers build &amp; run, weather chat verified end-to-end, liquid-glass frontend; public repo <a href="https://github.com/gasantiago16/squidfall">gasantiago16/squidfall</a> + self-hosted runner <code>squidfall-win</code>; CI green on every push (build · tests · ruff · Trivy). <strong>Next: Phase 4</strong> — the CD pipeline.</div>
 </header>
 
 <h2>1 · What Squidfall is</h2>
@@ -184,8 +184,8 @@
 <h2>5 · CI/CD we are adding <span class="sub">(the blank doc pages)</span></h2>
 <p>The published <strong>CI, CD, Platform Resources, Deployment, Documentation</strong> pages are empty stubs (<code>Step 1. Text goes here.</code>). We design and build them locally.</p>
 <div class="cards">
-  <div class="card"><h3>CI — push / PR</h3>
-    <p>Build 5 images → backend tests on SQLite (no DB needed) → lint (ruff/eslint) → <strong>Trivy</strong> image scan → smoke tests (backend POST, inference health, tools MCP handshake).</p></div>
+  <div class="card"><h3>CI — ✅ live (<code>ci.yml</code>)</h3>
+    <p>Build 5 images → Django check+tests on SQLite → tools/inference import checks → ruff (critical) → <strong>Trivy</strong> (report-only). Ephemeral <code>docker run</code> (no <code>compose up</code>) to avoid collisions.</p></div>
   <div class="card"><h3>CD — merge / tag</h3>
     <p>Tag images by SHA → push to <strong>local registry</strong> → deploy via <code>make ... start</code> → post-deploy health gate → rollback on failure.</p></div>
   <div class="card"><h3>Local git runner — live</h3>
@@ -198,8 +198,8 @@
   <tr><td>0</td><td>Scaffolding + architecture docs</td><td>✅ done</td></tr>
   <tr><td>1</td><td>Build &amp; run app locally</td><td>✅ <strong>done</strong> — 5 containers built + running, weather chat verified E2E, glass UI</td></tr>
   <tr><td>2</td><td>GitHub repo + self-hosted runner</td><td>✅ <strong>done</strong> — public repo, runner <code>squidfall-win</code> online, hello-world green</td></tr>
-  <tr><td>3</td><td>CI pipeline</td><td>⏭ <strong>next</strong> — build + test + lint + Trivy scan (self-hosted)</td></tr>
-  <tr><td>4</td><td>CD pipeline</td><td>local registry + versioned images + auto deploy + health gate</td></tr>
+  <tr><td>3</td><td>CI pipeline</td><td>✅ <strong>done</strong> — <code>ci.yml</code> green (build · tests · ruff · Trivy report-only)</td></tr>
+  <tr><td>4</td><td>CD pipeline</td><td>⏭ <strong>next</strong> — local registry + SHA-tagged images + deploy to prod-like project + health gate</td></tr>
   <tr><td>5</td><td>Author blank doc pages</td><td>real CI / CD / Platform / Deployment / Documentation content</td></tr>
   <tr><td>6</td><td>Platform + deployment hardening</td><td>secrets, network/auth tightening, prod-like target</td></tr>
 </table>
