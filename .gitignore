@@ -16,6 +16,9 @@ next-env.d.ts
 # Secrets — never commit real keys (copy the .example and fill in)
 tools/.env
 
+# Root compose build/deploy config (mirror URLs etc.) — copy from .env.example
+/.env
+
 # OS
 .DS_Store
 Thumbs.db

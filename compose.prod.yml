@@ -2,16 +2,16 @@
 #   docker compose -p squidfall-prod -f compose.prod.yml pull
 #   docker compose -p squidfall-prod -f compose.prod.yml up -d
 #
-# Images come from the local registry (localhost:5000); TAG selects the version
-# (CD sets it to the commit SHA). Distinct container names + shifted host ports
-# avoid collisions with the dev stack. Network aliases match the dev service
-# names so the committed .env files (PGHOST=squidfall-database, etc.) resolve
-# unchanged inside this project's isolated network.
+# Images come from PROD_IMAGE_PREFIX (default: the local registry; GitLab CI
+# sets it to $CI_REGISTRY_IMAGE). TAG selects the version (CD = commit SHA).
+# Distinct container names + shifted host ports avoid collisions with the dev
+# stack. Network aliases match the dev service names so the committed .env
+# files (PGHOST=squidfall-database, etc.) resolve unchanged in this network.
 
 services:
 
   database:
-    image: localhost:5000/squidfall/database:${TAG:-latest}
+    image: ${PROD_IMAGE_PREFIX:-localhost:5000/squidfall}/database:${TAG:-latest}
     container_name: squidfall-prod-database
     networks:
       default:
@@ -29,7 +29,7 @@ services:
       start_period: 5s
 
   backend:
-    image: localhost:5000/squidfall/backend:${TAG:-latest}
+    image: ${PROD_IMAGE_PREFIX:-localhost:5000/squidfall}/backend:${TAG:-latest}
     container_name: squidfall-prod-backend
     networks:
       default:
@@ -43,7 +43,7 @@ services:
       - backend/.env
 
   tools:
-    image: localhost:5000/squidfall/tools:${TAG:-latest}
+    image: ${PROD_IMAGE_PREFIX:-localhost:5000/squidfall}/tools:${TAG:-latest}
     container_name: squidfall-prod-tools
     networks:
       default:
@@ -55,7 +55,7 @@ services:
         required: false
 
   inference:
-    image: localhost:5000/squidfall/inference:${TAG:-latest}
+    image: ${PROD_IMAGE_PREFIX:-localhost:5000/squidfall}/inference:${TAG:-latest}
     container_name: squidfall-prod-inference
     networks:
       default:
@@ -70,7 +70,7 @@ services:
       - inference/.env
 
   frontend:
-    image: localhost:5000/squidfall/frontend:${TAG:-latest}
+    image: ${PROD_IMAGE_PREFIX:-localhost:5000/squidfall}/frontend:${TAG:-latest}
     container_name: squidfall-prod-frontend
     networks:
       default:

@@ -2,7 +2,11 @@ services:
 
   database:
     profiles: [ all, backend, database ]
-    build: database
+    build:
+      context: database
+      args:
+        REGISTRY_PREFIX: "${REGISTRY_PREFIX:-}"
+        APK_MIRROR: "${APK_MIRROR:-}"
     image: squidfall/database:latest
     container_name: squidfall-database
     ports:
@@ -22,7 +26,12 @@ services:
 
   backend:
     profiles: [ all, backend ]
-    build: backend
+    build:
+      context: backend
+      args:
+        REGISTRY_PREFIX: "${REGISTRY_PREFIX:-}"
+        PIP_INDEX_URL: "${PIP_INDEX_URL:-}"
+        PIP_TRUSTED_HOST: "${PIP_TRUSTED_HOST:-}"
     image: squidfall/backend:latest
     container_name: squidfall-backend
     depends_on:
@@ -35,28 +44,38 @@ services:
 
   tools:
     profiles: [ all, inference, tools ]
-    build: tools
+    build:
+      context: tools
+      args:
+        REGISTRY_PREFIX: "${REGISTRY_PREFIX:-}"
+        PIP_INDEX_URL: "${PIP_INDEX_URL:-}"
+        PIP_TRUSTED_HOST: "${PIP_TRUSTED_HOST:-}"
     image: squidfall/tools:latest
     container_name: squidfall-tools
     ports:
       - "8002:8002"
     # gitignored (holds the geocoding key) — optional so a fresh clone / CI
-    # build doesn't fail; tools/main.py defaults the key to "" when unset.
+    # build doesn't fail; providers default the key to "" when unset.
     env_file:
       - path: tools/.env
         required: false
 
   inference:
     profiles: [ all, inference ]
-    build: inference
+    build:
+      context: inference
+      args:
+        REGISTRY_PREFIX: "${REGISTRY_PREFIX:-}"
+        PIP_INDEX_URL: "${PIP_INDEX_URL:-}"
+        PIP_TRUSTED_HOST: "${PIP_TRUSTED_HOST:-}"
     image: squidfall/inference:latest
     container_name: squidfall-inference
     depends_on:
       - tools
     ports:
       - "8001:8001"
-    # Lets the container reach Ollama running on the host (works on Docker
-    # Desktop automatically; explicit mapping keeps it portable to Linux).
+    # Lets the container reach Ollama on the host (Docker Desktop auto; explicit
+    # mapping keeps it portable to Linux).
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file:
@@ -68,6 +87,9 @@ services:
       context: frontend
       args:
         LANGGRAPH_DEPLOYMENT_URL: "http://squidfall-inference:8001/api/v1"
+        REGISTRY_PREFIX: "${REGISTRY_PREFIX:-}"
+        NPM_REGISTRY: "${NPM_REGISTRY:-}"
+        APK_MIRROR: "${APK_MIRROR:-}"
     image: squidfall/frontend:latest
     container_name: squidfall-frontend
     depends_on:

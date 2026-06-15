@@ -1,14 +1,17 @@
-# GitLab CI/CD — translation of the GitHub Actions pipeline (.github/workflows/
-# ci.yml + cd.yml) for an Army GitLab instance.
+# GitLab CI/CD — translation of the GitHub Actions pipeline (ci.yml + cd.yml)
+# for an Army GitLab instance.
 #
 # Target runner: a GitLab Runner with the **shell executor** on a Linux/WSL host
-# that has Docker + Compose v2 (and, for `deploy`, the local registry + Ollama).
-# A shell executor shares the host Docker daemon, so images built in `build`
-# are visible to later jobs (as with the GitHub self-hosted runner). Set the
-# runner tag below to match yours.
+# that has Docker + Compose v2. A shell executor shares the host Docker daemon,
+# so images built in `build` are visible to later jobs.
 #
-# Pipeline mirrors GitHub: build -> (backend-test | imports | lint) -> trivy
-#                          -> deploy (version tags only).
+# AIR-GAP / MIRRORS: every external pull is overridable via CI/CD variables —
+#   RUFF_IMAGE, TRIVY_IMAGE                      (tool images, below)
+#   REGISTRY_PREFIX, PIP_INDEX_URL, PIP_TRUSTED_HOST, NPM_REGISTRY, APK_MIRROR
+#       (build-time mirrors; docker compose build reads them from the job env)
+# Set them as masked/protected CI/CD variables in a closed enclave.
+#
+# REGISTRY: CD pushes to GitLab's built-in Container Registry ($CI_REGISTRY_IMAGE).
 
 stages: [build, test, scan, deploy]
 
@@ -17,7 +20,8 @@ default:
 
 variables:
   COMPOSE_BAKE: "true"
-  REGISTRY: "localhost:5000"
+  RUFF_IMAGE: "ghcr.io/astral-sh/ruff:latest"
+  TRIVY_IMAGE: "aquasec/trivy:latest"
 
 build:
   stage: build
@@ -35,6 +39,7 @@ imports:
   needs: [build]
   script:
     - docker run --rm squidfall/tools:latest python -c "import fastmcp"
+    # weather providers — offline static (air-gap-safe)
     - docker run --rm -e GEOCODER_PROVIDER=static -e GEOCODER_STATIC_DEFAULT=40.44,-79.99 -e FORECAST_PROVIDER=static -e FORECAST_STATIC_TEXT=offline-ok squidfall/tools:latest python -c "import asyncio; from squidfall.providers import geocode, forecast; print(asyncio.run(geocode('x')), '|', asyncio.run(forecast(1.0, 2.0)))"
     - docker run --rm squidfall/inference:latest python -c "import langgraph, langchain_ollama, ag_ui_langgraph, langchain_mcp_adapters"
     # LLM provider factory — offline construction for all 3 providers
@@ -46,7 +51,7 @@ lint:
   stage: test
   needs: [build]
   script:
-    - docker run --rm -v "$CI_PROJECT_DIR:/src" -w /src ghcr.io/astral-sh/ruff:latest check --select E9,F63,F7,F82 backend tools inference
+    - docker run --rm -v "$CI_PROJECT_DIR:/src" -w /src "$RUFF_IMAGE" check --select E9,F63,F7,F82 backend tools inference
 
 trivy:
   stage: scan
@@ -54,8 +59,8 @@ trivy:
   script:
     - docker save squidfall/backend:latest -o backend.tar
     - docker save squidfall/inference:latest -o inference.tar
-    - docker run --rm -v "$CI_PROJECT_DIR:/work" aquasec/trivy:latest image --input /work/backend.tar --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress
-    - docker run --rm -v "$CI_PROJECT_DIR:/work" aquasec/trivy:latest image --input /work/inference.tar --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress
+    - docker run --rm -v "$CI_PROJECT_DIR:/work" "$TRIVY_IMAGE" image --input /work/backend.tar --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress
+    - docker run --rm -v "$CI_PROJECT_DIR:/work" "$TRIVY_IMAGE" image --input /work/inference.tar --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress
   after_script:
     - rm -f backend.tar inference.tar
 
@@ -65,15 +70,16 @@ deploy:
     - if: '$CI_COMMIT_TAG =~ /^v/'      # only on a version tag (a release)
   variables:
     TAG: "$CI_COMMIT_SHA"
+    PROD_IMAGE_PREFIX: "$CI_REGISTRY_IMAGE"   # GitLab's built-in Container Registry
   script:
-    # Inject the geocoding key from a masked CI/CD variable, if set (Settings >
-    # CI/CD > Variables: GEOCODING_API_KEY, masked + protected).
+    # Inject the geocoding key from a masked CI/CD variable, if set.
     - if [ -n "$GEOCODING_API_KEY" ]; then echo "GEOCODING_API_KEY=$GEOCODING_API_KEY" > tools/.env; fi
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
     - docker compose --profile all build
     - |
       for s in database backend tools inference frontend; do
-        docker tag "squidfall/$s:latest" "$REGISTRY/squidfall/$s:$TAG"
-        docker push "$REGISTRY/squidfall/$s:$TAG"
+        docker tag "squidfall/$s:latest" "$CI_REGISTRY_IMAGE/$s:$TAG"
+        docker push "$CI_REGISTRY_IMAGE/$s:$TAG"
       done
     - docker compose -p squidfall-prod -f compose.prod.yml up -d --pull always
     - |
@@ -84,9 +90,9 @@ deploy:
       done
     - |
       for s in database backend tools inference frontend; do
-        docker tag "$REGISTRY/squidfall/$s:$TAG" "$REGISTRY/squidfall/$s:stable"
-        docker push "$REGISTRY/squidfall/$s:stable"
+        docker tag "$CI_REGISTRY_IMAGE/$s:$TAG" "$CI_REGISTRY_IMAGE/$s:stable"
+        docker push "$CI_REGISTRY_IMAGE/$s:stable"
       done
   after_script:
     # Roll back to the last good :stable if the deploy/health-gate failed.
-    - if [ "$CI_JOB_STATUS" = "failed" ]; then echo "rolling back to :stable"; TAG=stable docker compose -p squidfall-prod -f compose.prod.yml up -d --pull always || true; fi
+    - if [ "$CI_JOB_STATUS" = "failed" ]; then echo "rolling back to :stable"; PROD_IMAGE_PREFIX="$CI_REGISTRY_IMAGE" TAG=stable docker compose -p squidfall-prod -f compose.prod.yml up -d --pull always || true; fi

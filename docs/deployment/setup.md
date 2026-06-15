@@ -56,6 +56,20 @@ The weather tools are pluggable like the LLM (factory in `tools/squidfall/provid
 
 In a closed enclave with no egress, set both to `static` (or point the base URLs at internal services) so the tools work without the public internet.
 
+## E. Air-gapped builds (mirrors + GitLab registry)
+Every external pull in the build is overridable (defaults = public internet):
+
+| Knob | Replaces | Example |
+|---|---|---|
+| `REGISTRY_PREFIX` | base-image source (prepended to `FROM`) | `mirror.internal/` |
+| `PIP_INDEX_URL` / `PIP_TRUSTED_HOST` | PyPI | `https://nexus.internal/repository/pypi/simple` |
+| `NPM_REGISTRY` | npm registry | `https://nexus.internal/repository/npm/` |
+| `APK_MIRROR` | `dl-cdn.alpinelinux.org` | `apk.internal` |
+
+Set these in a root `.env` (see `.env.example`) for local builds, or as GitLab
+CI/CD variables. On GitLab, CD pushes to the built-in **Container Registry**
+(`$CI_REGISTRY_IMAGE`), and `RUFF_IMAGE` / `TRIVY_IMAGE` can be repointed at internal mirrors.
+
 ## Notes
 - `host.docker.internal` lets containers reach Ollama on the host (on WSL, the Windows host).
 - `tools/.env` (gitignored) holds the geocoding key; it is **optional** for startup
